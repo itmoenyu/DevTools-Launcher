@@ -36,7 +36,7 @@ export function DashboardPageMain() {
   async function startAllServices() {
     try {
       await Promise.all(services.map((item) => startService(item.service.id)))
-      messageApi.success('已触发全部服务启动')
+      messageApi.success('全部启动成功')
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : '批量启动失败')
     }
@@ -45,7 +45,7 @@ export function DashboardPageMain() {
   async function stopAllServices() {
     try {
       await Promise.all(services.map((item) => stopService(item.service.id)))
-      messageApi.success('已触发全部服务停止')
+      messageApi.success('全部停止成功')
     } catch (error) {
       messageApi.error(error instanceof Error ? error.message : '批量停止失败')
     }

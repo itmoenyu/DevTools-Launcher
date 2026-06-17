@@ -178,7 +178,7 @@ export function ServiceListPageMain() {
         await restartService(serviceId)
       }
 
-      messageApi.success(`已触发${actionTextMap[action]}操作`)
+      messageApi.success(`${actionTextMap[action]}成功`)
     } catch (error) {
       messageApi.error(getFriendlyActionError(action, error))
     } finally {
@@ -221,16 +221,15 @@ export function ServiceListPageMain() {
               title: '服务名称',
               render: (_, record) => (
                 <Space orientation="vertical" size={4}>
-                  <Button
-                    type="link"
+                  <a
                     onClick={() => {
                       setSelectedServiceId(record.service.id)
                       navigate(`/services/${record.service.id}`)
                     }}
-                    style={{ paddingInline: 0, justifyContent: 'flex-start' }}
+                    style={{ fontSize: 16, fontWeight: 500 }}
                   >
                     {record.service.name}
-                  </Button>
+                  </a>
                   <Typography.Text type="secondary">
                     {record.service.description || '暂无备注说明'}
                   </Typography.Text>

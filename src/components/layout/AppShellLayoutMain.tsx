@@ -6,10 +6,11 @@ import {
   HistoryOutlined,
   SettingOutlined,
   ToolOutlined,
+  ArrowLeftOutlined,
 } from '@ant-design/icons'
-import { Layout, Menu, Typography, Space } from 'antd'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-
+import { Layout, Menu, Typography, Space, Button } from 'antd'
+import { Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { LogoIcon } from '../common/LogoIcon'
 
@@ -37,6 +38,16 @@ const menuItems = [
 export function AppShellLayoutMain() {
   const location = useLocation()
   const navigate = useNavigate()
+  const navType = useNavigationType()
+  const [historyDepth, setHistoryDepth] = useState(0)
+
+  useEffect(() => {
+    if (navType === 'PUSH') {
+      setHistoryDepth((prev) => prev + 1)
+    } else if (navType === 'POP') {
+      setHistoryDepth((prev) => Math.max(0, prev - 1))
+    }
+  }, [location.key, navType])
 
   return (
     <Layout className="page-shell" style={{ background: 'transparent' }}>
@@ -78,6 +89,19 @@ export function AppShellLayoutMain() {
           }}
         >
           <Space align="center" size={16}>
+            {historyDepth > 0 && (
+              <ArrowLeftOutlined
+                className="back-button-icon"
+                onClick={() => navigate(-1)}
+                style={{
+                  fontSize: 18,
+                  cursor: 'pointer',
+                  stroke: 'currentColor',
+                  strokeWidth: 40,
+                  transform: 'translateY(2px)',
+                }}
+              />
+            )}
             <Typography.Title level={4} style={{ margin: 0 }}>
               DevTools Launcher
             </Typography.Title>

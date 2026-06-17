@@ -41,7 +41,8 @@ body {
 }
 
 .page-shell {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .page-content {
@@ -219,4 +220,14 @@ body {
 
 .menu-item-stack .menu-text {
   font-size: 12px;
+}
+
+.back-button-icon {
+  padding: 6px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.back-button-icon:hover {
+  background: rgba(0, 0, 0, 0.06);
 }

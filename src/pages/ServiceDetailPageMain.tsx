@@ -121,7 +121,7 @@ export function ServiceDetailPageMain() {
         await forceKillService(serviceDetail.service.id)
       }
 
-      messageApi.success(`已触发${actionTextMap[action]}操作`)
+      messageApi.success(`${actionTextMap[action]}成功`)
       await refreshDetail(serviceDetail.service.id)
     } finally {
       setActionLoading(null)
