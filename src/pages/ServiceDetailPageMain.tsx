@@ -1,11 +1,13 @@
 import { LoadingOutlined } from '@ant-design/icons'
-import { Badge, Button, Card, Descriptions, Empty, Space, Spin, Tag, Typography, message, Input, Tooltip } from 'antd'
+import { Button, Card, Descriptions, Empty, Space, Spin, Tag, Typography, message, Input, Tooltip } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import ServiceRuntimeStatusIndicator from '@/components/common/ServiceRuntimeStatusIndicator'
 import {
   forceKillService,
   getServiceDetail,
+  inspectPorts,
   restartService,
   startService,
   stopService,
@@ -13,8 +15,16 @@ import {
 } from '@/services/tauri-api/client'
 import { useAppStore } from '@/store/app-store'
 import { useLogStore } from '@/store/log-store'
-import { formatDateTime, formatDuration, formatStatus } from '@/utils/formatters'
-import type { ServiceWithRuntime } from '@/types/service'
+import { useServiceStore } from '@/store/service-store'
+import { formatDateTime, formatDuration } from '@/utils/formatters'
+import {
+  getFriendlyServiceActionError,
+  getServiceActionAvailability,
+  getServiceInstanceSourceExplanation,
+  getServiceLifecycleExplanation,
+  getServiceStatusPresentation,
+  mergePortInspectionItems,
+} from '@/utils/serviceStatusPresentation'
 
 const actionTextMap = {
   start: '启动',
@@ -26,16 +36,23 @@ const actionTextMap = {
 export function ServiceDetailPageMain() {
   const navigate = useNavigate()
   const { serviceId } = useParams()
+  const services = useServiceStore((state) => state.services)
+  const ports = useServiceStore((state) => state.ports)
+  const upsertService = useServiceStore((state) => state.upsertService)
+  const setPorts = useServiceStore((state) => state.setPorts)
   const setSelectedServiceId = useAppStore((state) => state.setSelectedServiceId)
   const setActiveLogServiceId = useAppStore((state) => state.setActiveLogServiceId)
   const setLogs = useLogStore((state) => state.setLogs)
   const logsMap = useLogStore((state) => state.logs)
   const [messageApi, contextHolder] = message.useMessage()
-  const [serviceDetail, setServiceDetail] = useState<ServiceWithRuntime | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<
     'start' | 'stop' | 'restart' | 'kill' | 'refresh' | null
   >(null)
+  const serviceDetail = useMemo(
+    () => services.find((item) => item.service.id === serviceId) ?? null,
+    [serviceId, services],
+  )
 
   async function refreshDetail(currentServiceId: string) {
     setActionLoading('refresh')
@@ -44,12 +61,17 @@ export function ServiceDetailPageMain() {
         getServiceDetail(currentServiceId),
         queryLogs(currentServiceId),
       ])
-      setServiceDetail(detail)
-      setSelectedServiceId(detail.service.id)
-      setActiveLogServiceId(detail.service.id)
+      upsertService(detail)
       setLogs(detail.service.id, logs)
+
+      if (detail.service.port !== null) {
+        const latestPorts = await inspectPorts([detail.service.port])
+        const currentPorts = useServiceStore.getState().ports
+        setPorts(mergePortInspectionItems(currentPorts, latestPorts))
+      }
     } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : '刷新服务详情失败')
+      const errorMessage = error instanceof Error ? error.message : '刷新服务详情失败'
+      messageApi.error(errorMessage)
     } finally {
       setActionLoading(null)
     }
@@ -72,16 +94,23 @@ export function ServiceDetailPageMain() {
           return
         }
 
-        setServiceDetail(detail)
-        setSelectedServiceId(detail.service.id)
-        setActiveLogServiceId(detail.service.id)
+        upsertService(detail)
         setLogs(detail.service.id, logs)
+
+        if (detail.service.port !== null) {
+          const latestPorts = await inspectPorts([detail.service.port])
+          if (!active) {
+            return
+          }
+
+          const currentPorts = useServiceStore.getState().ports
+          setPorts(mergePortInspectionItems(currentPorts, latestPorts))
+        }
       } catch (error) {
         if (!active) {
           return
         }
 
-        setServiceDetail(null)
         messageApi.error(
           error instanceof Error ? error.message : '服务详情加载失败，请返回服务列表后重试',
         )
@@ -97,33 +126,47 @@ export function ServiceDetailPageMain() {
     return () => {
       active = false
     }
-  }, [messageApi, serviceId, setActiveLogServiceId, setLogs, setSelectedServiceId])
+  }, [messageApi, serviceId, setLogs, setPorts, upsertService])
+
+  useEffect(() => {
+    if (!serviceDetail) {
+      return
+    }
+
+    setSelectedServiceId(serviceDetail.service.id)
+    setActiveLogServiceId(serviceDetail.service.id)
+  }, [serviceDetail, setActiveLogServiceId, setSelectedServiceId])
 
   async function handleAction(action: 'start' | 'stop' | 'restart' | 'kill') {
     if (!serviceDetail) {
       return
     }
 
+    const currentServiceId = serviceDetail.service.id
     setActionLoading(action)
     try {
       if (action === 'start') {
-        await startService(serviceDetail.service.id)
+        await startService(currentServiceId)
       }
 
       if (action === 'stop') {
-        await stopService(serviceDetail.service.id)
+        await stopService(currentServiceId)
       }
 
       if (action === 'restart') {
-        await restartService(serviceDetail.service.id)
+        await restartService(currentServiceId)
       }
 
       if (action === 'kill') {
-        await forceKillService(serviceDetail.service.id)
+        await forceKillService(currentServiceId)
       }
 
       messageApi.success(`${actionTextMap[action]}成功`)
-      await refreshDetail(serviceDetail.service.id)
+      await refreshDetail(currentServiceId)
+    } catch (error) {
+      const errorMessage = getFriendlyServiceActionError(action, error)
+      messageApi.error(errorMessage)
+      await refreshDetail(currentServiceId)
     } finally {
       setActionLoading(null)
     }
@@ -136,6 +179,22 @@ export function ServiceDetailPageMain() {
 
     return (logsMap[serviceDetail.service.id] ?? []).slice(-8).reverse()
   }, [logsMap, serviceDetail])
+  const statusPresentation = useMemo(
+    () => (serviceDetail ? getServiceStatusPresentation(serviceDetail, ports) : null),
+    [ports, serviceDetail],
+  )
+  const actionAvailability = useMemo(
+    () => (serviceDetail ? getServiceActionAvailability(serviceDetail, ports) : null),
+    [ports, serviceDetail],
+  )
+  const lifecycleExplanation = useMemo(
+    () => (serviceDetail ? getServiceLifecycleExplanation(serviceDetail, ports) : null),
+    [ports, serviceDetail],
+  )
+  const instanceSourceExplanation = useMemo(
+    () => (serviceDetail ? getServiceInstanceSourceExplanation(serviceDetail, ports) : null),
+    [ports, serviceDetail],
+  )
 
   if (loading) {
     return (
@@ -158,6 +217,14 @@ export function ServiceDetailPageMain() {
     )
   }
 
+  if (!statusPresentation) {
+    return null
+  }
+
+  if (!actionAvailability || !lifecycleExplanation || !instanceSourceExplanation) {
+    return null
+  }
+
   return (
     <Space orientation="vertical" size={16} style={{ width: '100%' }}>
       {contextHolder}
@@ -175,8 +242,13 @@ export function ServiceDetailPageMain() {
             刷新
           </Button>
           <Tooltip 
-            open={actionLoading === 'start' || undefined} 
-            title={actionLoading === 'start' ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+            title={
+              actionAvailability.startDisabled
+                ? actionAvailability.startReason
+                : actionLoading === 'start'
+                  ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
+                  : ''
+            }
             color="rgba(255, 255, 255, 0.15)"
             overlayClassName="glass-tooltip"
             overlayStyle={{
@@ -194,14 +266,22 @@ export function ServiceDetailPageMain() {
             arrow={{ pointAtCenter: true }}
           >
             <span style={{ display: 'inline-block' }}>
-              <Button disabled={actionLoading === 'start'} onClick={() => void handleAction('start')}>
+              <Button
+                disabled={actionLoading === 'start' || actionAvailability.startDisabled}
+                onClick={() => void handleAction('start')}
+              >
                 启动
               </Button>
             </span>
           </Tooltip>
           <Tooltip 
-            open={actionLoading === 'stop' || undefined} 
-            title={actionLoading === 'stop' ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+            title={
+              actionAvailability.stopDisabled
+                ? actionAvailability.stopReason
+                : actionLoading === 'stop'
+                  ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
+                  : ''
+            }
             color="rgba(255, 255, 255, 0.15)"
             overlayClassName="glass-tooltip"
             overlayStyle={{
@@ -219,14 +299,22 @@ export function ServiceDetailPageMain() {
             arrow={{ pointAtCenter: true }}
           >
             <span style={{ display: 'inline-block' }}>
-              <Button disabled={actionLoading === 'stop'} onClick={() => void handleAction('stop')}>
+              <Button
+                disabled={actionLoading === 'stop' || actionAvailability.stopDisabled}
+                onClick={() => void handleAction('stop')}
+              >
                 停止
               </Button>
             </span>
           </Tooltip>
           <Tooltip 
-            open={actionLoading === 'restart' || undefined} 
-            title={actionLoading === 'restart' ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+            title={
+              actionAvailability.restartDisabled
+                ? actionAvailability.restartReason
+                : actionLoading === 'restart'
+                  ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
+                  : ''
+            }
             color="rgba(255, 255, 255, 0.15)"
             overlayClassName="glass-tooltip"
             overlayStyle={{
@@ -244,14 +332,22 @@ export function ServiceDetailPageMain() {
             arrow={{ pointAtCenter: true }}
           >
             <span style={{ display: 'inline-block' }}>
-              <Button disabled={actionLoading === 'restart'} onClick={() => void handleAction('restart')}>
+              <Button
+                disabled={actionLoading === 'restart' || actionAvailability.restartDisabled}
+                onClick={() => void handleAction('restart')}
+              >
                 重启
               </Button>
             </span>
           </Tooltip>
           <Tooltip 
-            open={actionLoading === 'kill' || undefined} 
-            title={actionLoading === 'kill' ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+            title={
+              actionAvailability.killDisabled
+                ? actionAvailability.killReason
+                : actionLoading === 'kill'
+                  ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
+                  : ''
+            }
             color="rgba(255, 255, 255, 0.15)"
             overlayClassName="glass-tooltip"
             overlayStyle={{
@@ -269,7 +365,11 @@ export function ServiceDetailPageMain() {
             arrow={{ pointAtCenter: true }}
           >
             <span style={{ display: 'inline-block' }}>
-              <Button danger disabled={actionLoading === 'kill'} onClick={() => void handleAction('kill')}>
+              <Button
+                danger
+                disabled={actionLoading === 'kill' || actionAvailability.killDisabled}
+                onClick={() => void handleAction('kill')}
+              >
                 强制结束
               </Button>
             </span>
@@ -278,35 +378,7 @@ export function ServiceDetailPageMain() {
       </div>
       <Card className="glass-card table-card">
         <Space style={{ marginBottom: 16 }} wrap>
-          <Tag>
-            当前状态：
-            <Tooltip
-              title={
-                <Space orientation="vertical" size={2}>
-                  <Typography.Text style={{ color: 'rgba(255,255,255,0.85)' }}>
-                    {formatStatus(serviceDetail.runtime.status)}
-                  </Typography.Text>
-                  <Typography.Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
-                    {serviceDetail.runtime.statusMessage || '暂无状态说明'}
-                  </Typography.Text>
-                </Space>
-              }
-            >
-              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, cursor: 'pointer', marginLeft: 4 }}>
-                <Badge
-                  status={
-                    serviceDetail.runtime.status === 'running'
-                      ? 'success'
-                      : serviceDetail.runtime.status === 'error'
-                        ? 'error'
-                        : ['starting', 'stopping'].includes(serviceDetail.runtime.status)
-                          ? 'processing'
-                          : 'default'
-                  }
-                />
-              </div>
-            </Tooltip>
-          </Tag>
+          <Tag>当前状态：{statusPresentation.label}</Tag>
           <Tag color="blue">服务类型：{serviceDetail.service.serviceType}</Tag>
           <Tag>PID：{serviceDetail.runtime.pid ?? '--'}</Tag>
           <Tag>端口：{serviceDetail.service.port ?? '--'}</Tag>
@@ -324,34 +396,12 @@ export function ServiceDetailPageMain() {
             {
               key: 'status',
               label: '当前状态',
-              children: (
-                <Tooltip
-                  title={
-                    <Space orientation="vertical" size={2}>
-                      <Typography.Text style={{ color: 'rgba(255,255,255,0.85)' }}>
-                        {formatStatus(serviceDetail.runtime.status)}
-                      </Typography.Text>
-                      <Typography.Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
-                        {serviceDetail.runtime.statusMessage || '暂无状态说明'}
-                      </Typography.Text>
-                    </Space>
-                  }
-                >
-                  <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, cursor: 'pointer' }}>
-                    <Badge
-                      status={
-                        serviceDetail.runtime.status === 'running'
-                          ? 'success'
-                          : serviceDetail.runtime.status === 'error'
-                            ? 'error'
-                            : ['starting', 'stopping'].includes(serviceDetail.runtime.status)
-                              ? 'processing'
-                              : 'default'
-                      }
-                    />
-                  </div>
-                </Tooltip>
-              ),
+              children: <ServiceRuntimeStatusIndicator presentation={statusPresentation} />,
+            },
+            {
+              key: 'statusSource',
+              label: '状态来源',
+              children: instanceSourceExplanation.detail,
             },
             {
               key: 'duration',
@@ -372,6 +422,11 @@ export function ServiceDetailPageMain() {
               key: 'heartbeat',
               label: '最近心跳',
               children: formatDateTime(serviceDetail.runtime.lastHeartbeatAt),
+            },
+            {
+              key: 'lifecycle',
+              label: '生命周期说明',
+              children: lifecycleExplanation.detail,
             },
             {
               key: 'args',

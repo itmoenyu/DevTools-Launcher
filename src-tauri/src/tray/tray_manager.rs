@@ -9,7 +9,7 @@ use tauri::{
 };
 use tracing::warn;
 
-use crate::{core::error::AppResult, service::service_manager::shutdown_managed_services};
+use crate::{core::error::AppResult, lifecycle::app_lifecycle_manager};
 
 fn load_tray_icon() -> AppResult<Image<'static>> {
     let bytes = include_bytes!("../../icons/32x32.png");
@@ -60,16 +60,10 @@ pub fn setup_tray(app_handle: &AppHandle) -> AppResult<()> {
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                app_lifecycle_manager::show_main_window(app);
             }
             "quit" => {
-                if let Err(error) = shutdown_managed_services(app) {
-                    warn!("应用退出前自动停止托管服务时出现问题: {}", error);
-                }
-                app.exit(0)
+                app_lifecycle_manager::request_app_exit(app, "tray-menu-quit");
             }
             _ => {}
         })
@@ -80,9 +74,15 @@ pub fn setup_tray(app_handle: &AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("main") {
         window.on_window_event(move |event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
+                let state = app.state::<crate::core::app_state::AppState>();
+                if state.exiting.load(std::sync::atomic::Ordering::SeqCst) {
+                    return;
+                }
+
                 api.prevent_close();
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.hide();
+                if let Err(error) = app_lifecycle_manager::handle_main_window_close(&app) {
+                    warn!("处理主窗口关闭事件失败，将回退为退出应用: {}", error);
+                    app_lifecycle_manager::request_app_exit(&app, "main-window-close-fallback");
                 }
             }
         });

@@ -16,6 +16,7 @@ interface ServiceStoreState {
   settings: AppSettings | null
   loading: boolean
   setServices: (services: ServiceWithRuntime[]) => void
+  upsertService: (service: ServiceWithRuntime) => void
   updateRuntime: (runtime: ServiceRuntime) => void
   setLaunchGroups: (launchGroups: LaunchGroupDefinition[]) => void
   setPorts: (ports: PortInspectionItem[]) => void
@@ -32,6 +33,18 @@ export const useServiceStore = create<ServiceStoreState>((set) => ({
   settings: null,
   loading: false,
   setServices: (services) => set({ services }),
+  upsertService: (service) =>
+    set((state) => {
+      const index = state.services.findIndex((item) => item.service.id === service.service.id)
+
+      if (index === -1) {
+        return { services: [...state.services, service] }
+      }
+
+      const nextServices = [...state.services]
+      nextServices[index] = service
+      return { services: nextServices }
+    }),
   updateRuntime: (runtime) =>
     set((state) => ({
       services: state.services.map((item) =>

@@ -8,7 +8,10 @@ use crate::{
     core::{
         app_state::AppState,
         error::{AppResult, IntoAppResult},
-        event_bus::{PORT_CONFLICT_DETECTED, SERVICE_OPERATION_FINISHED, SERVICE_STATUS_CHANGED},
+        event_bus::{
+            PORT_CONFLICT_DETECTED, SERVICE_LOG_APPENDED, SERVICE_OPERATION_FINISHED,
+            SERVICE_STATUS_CHANGED,
+        },
         types::{LaunchGroupDefinition, ServiceRuntime},
     },
     db::{
@@ -16,7 +19,10 @@ use crate::{
         launch_group_repository::get_launch_group,
         service_repository::{get_runtime, get_service, list_services_with_runtime, update_runtime},
     },
-    logs::log_streamer::stream_process_logs,
+    logs::{
+        log_repository::append_log,
+        log_streamer::stream_process_logs,
+    },
     port::process_lookup::{inspect_port, process_exists, process_matches_path},
     service::{
         graceful_shutdown::{stop_pid, stop_redis_service},
@@ -31,6 +37,18 @@ fn now() -> String {
 
 fn emit_runtime(app_handle: &AppHandle, runtime: &ServiceRuntime) {
     let _ = app_handle.emit(SERVICE_STATUS_CHANGED, runtime);
+}
+
+fn append_system_log(
+    app_handle: &AppHandle,
+    db_path: &str,
+    service_id: &str,
+    log_level: &str,
+    message: &str,
+) {
+    if let Ok(entry) = append_log(db_path, service_id, log_level, "system", message) {
+        let _ = app_handle.emit(SERVICE_LOG_APPENDED, entry);
+    }
 }
 
 fn persist_runtime(db_path: &str, runtime: &ServiceRuntime) -> AppResult<ServiceRuntime> {
@@ -82,6 +100,30 @@ fn mark_runtime_stopped(
     Ok(runtime)
 }
 
+fn mark_runtime_error(
+    db_path: &str,
+    app_handle: &AppHandle,
+    service_id: &str,
+    pid: Option<u32>,
+    started_at: Option<String>,
+    exit_code: Option<i32>,
+    message: &str,
+) -> AppResult<ServiceRuntime> {
+    let runtime = ServiceRuntime {
+        service_id: service_id.to_string(),
+        pid,
+        status: "error".to_string(),
+        started_at,
+        stopped_at: if pid.is_some() { None } else { Some(now()) },
+        exit_code,
+        last_heartbeat_at: Some(now()),
+        status_message: message.to_string(),
+    };
+    let runtime = persist_runtime(db_path, &runtime)?;
+    emit_runtime(app_handle, &runtime);
+    Ok(runtime)
+}
+
 fn runtime_belongs_to_service(
     service: &crate::core::types::ServiceDefinition,
     pid: u32,
@@ -90,7 +132,24 @@ fn runtime_belongs_to_service(
         return Ok(false);
     }
 
-    process_matches_path(pid, &service.exec_path)
+    if !process_matches_path(pid, &service.exec_path)? {
+        return Ok(false);
+    }
+
+    if let Some(port) = service.port {
+        let port_info = inspect_port(port)?;
+        return Ok(
+            port_info.occupied
+                && port_info.pid == Some(pid)
+                && port_info
+                    .process_path
+                    .as_deref()
+                    .map(|path| path.eq_ignore_ascii_case(&service.exec_path))
+                    .unwrap_or(false),
+        );
+    }
+
+    Ok(true)
 }
 
 fn rollback_runtime_after_stop_failure(
@@ -104,11 +163,7 @@ fn rollback_runtime_after_stop_failure(
     let runtime = ServiceRuntime {
         service_id: service_id.to_string(),
         pid,
-        status: if pid.is_some() {
-            "running".to_string()
-        } else {
-            "stopped".to_string()
-        },
+        status: if pid.is_some() { "error".to_string() } else { "stopped".to_string() },
         started_at,
         stopped_at: if pid.is_some() { None } else { Some(now()) },
         exit_code: None,
@@ -177,17 +232,6 @@ fn ensure_process_survives_startup(
 
         if let Some(status) = exit_status {
             let exit_code = status.code();
-            let runtime = ServiceRuntime {
-                service_id: service_id.to_string(),
-                pid: None,
-                status: "stopped".to_string(),
-                started_at: None,
-                stopped_at: Some(now()),
-                exit_code,
-                last_heartbeat_at: Some(now()),
-                status_message: "服务启动后立即退出".to_string(),
-            };
-            let runtime = persist_runtime(db_path, &runtime)?;
             let exit_text = exit_code
                 .map(|code| format!("退出码 {}", code))
                 .unwrap_or_else(|| "未返回退出码".to_string());
@@ -197,8 +241,18 @@ fn ensure_process_survives_startup(
             );
 
             error!("{}", message);
+            let _ = mark_runtime_error(
+                db_path,
+                app_handle,
+                service_id,
+                None,
+                None,
+                exit_code,
+                &message,
+            )?;
             append_history(db_path, service_id, service_name, "start", "failed", &message)?;
-            emit_runtime(app_handle, &runtime);
+            append_system_log(app_handle, db_path, service_id, "error", &message);
+            let _ = app_handle.emit(SERVICE_OPERATION_FINISHED, "start-failed");
 
             return Err(message);
         }
@@ -215,6 +269,7 @@ fn spawn_exit_watcher(
     child: Arc<Mutex<std::process::Child>>,
 ) {
     let children = app_handle.state::<AppState>().children.clone();
+    let emit_handle = app_handle.clone();
 
     thread::spawn(move || {
         let exit_status = child.lock().wait();
@@ -222,15 +277,38 @@ fn spawn_exit_watcher(
 
         if let Ok(status) = exit_status {
             info!("服务 {} (ID: {}) 已自然退出, 退出码: {:?}", service_name, service_id, status.code());
+            let previous_runtime = get_runtime(&db_path, &service_id).ok();
+            let was_stopping = previous_runtime
+                .as_ref()
+                .map(|runtime| runtime.status == "stopping")
+                .unwrap_or(false);
+            let exit_code = status.code();
+            let is_abnormal_exit = !was_stopping && exit_code.unwrap_or_default() != 0;
+            let status_message = if was_stopping {
+                "服务已停止".to_string()
+            } else if is_abnormal_exit {
+                format!(
+                    "服务异常退出（{}）",
+                    exit_code
+                        .map(|code| format!("退出码 {}", code))
+                        .unwrap_or_else(|| "未返回退出码".to_string())
+                )
+            } else {
+                "进程已退出".to_string()
+            };
             let runtime = ServiceRuntime {
                 service_id: service_id.clone(),
                 pid: None,
-                status: "stopped".to_string(),
-                started_at: None,
+                status: if is_abnormal_exit {
+                    "error".to_string()
+                } else {
+                    "stopped".to_string()
+                },
+                started_at: previous_runtime.as_ref().and_then(|runtime| runtime.started_at.clone()),
                 stopped_at: Some(now()),
-                exit_code: status.code(),
+                exit_code,
                 last_heartbeat_at: Some(now()),
-                status_message: "进程已退出".to_string(),
+                status_message: status_message.clone(),
             };
 
             let _ = update_runtime(&db_path, &runtime);
@@ -239,10 +317,18 @@ fn spawn_exit_watcher(
                 &service_id,
                 &service_name,
                 "exit",
-                "success",
-                "托管进程已自然退出",
+                if is_abnormal_exit { "failed" } else { "success" },
+                &status_message,
             );
-            let _ = app_handle.emit(SERVICE_STATUS_CHANGED, runtime);
+            append_system_log(
+                &emit_handle,
+                &db_path,
+                &service_id,
+                if is_abnormal_exit { "error" } else { "info" },
+                &status_message,
+            );
+            let _ = emit_handle.emit(SERVICE_OPERATION_FINISHED, "exit");
+            let _ = emit_handle.emit(SERVICE_STATUS_CHANGED, runtime);
         } else {
             error!("等待服务 {} 退出时出错", service_id);
         }
@@ -261,13 +347,23 @@ pub fn start_service(app_handle: &AppHandle, service_id: &str) -> AppResult<Serv
     let current_runtime = get_runtime(&state.db_path, service_id)?;
 
     if service.exec_path.trim().is_empty() || service.work_dir.trim().is_empty() {
+        let message = "服务缺少 exe 路径或工作目录，请先在服务管理里补充配置".to_string();
         warn!("服务配置不完整: {} (exe或工作目录为空)", service_id);
-        return Err("服务缺少 exe 路径或工作目录，请先在服务管理里补充配置".to_string());
+        let _ = mark_runtime_error(&state.db_path, app_handle, service_id, None, None, None, &message);
+        let _ = append_history(&state.db_path, service_id, &service.name, "start", "failed", &message);
+        append_system_log(app_handle, &state.db_path, service_id, "error", &message);
+        let _ = app_handle.emit(SERVICE_OPERATION_FINISHED, "start-failed");
+        return Err(message);
     }
 
     if !Path::new(&service.exec_path).exists() {
+        let message = format!("可执行文件不存在：{}", service.exec_path);
         warn!("可执行文件不存在: {}", service.exec_path);
-        return Err(format!("可执行文件不存在：{}", service.exec_path));
+        let _ = mark_runtime_error(&state.db_path, app_handle, service_id, None, None, None, &message);
+        let _ = append_history(&state.db_path, service_id, &service.name, "start", "failed", &message);
+        append_system_log(app_handle, &state.db_path, service_id, "error", &message);
+        let _ = app_handle.emit(SERVICE_OPERATION_FINISHED, "start-failed");
+        return Err(message);
     }
 
     if let Some(existing_child) = get_child(&state, service_id) {
@@ -299,9 +395,14 @@ pub fn start_service(app_handle: &AppHandle, service_id: &str) -> AppResult<Serv
     if let Some(port) = service.port {
         let port_info = inspect_port(port)?;
         if port_info.occupied {
+            let message = format!("端口 {} 已被占用，请先处理端口冲突", port);
             warn!("端口 {} 已被占用，服务 {} 启动失败", port, service_id);
             let _ = app_handle.emit(PORT_CONFLICT_DETECTED, &port_info);
-            return Err(format!("端口 {} 已被占用，请先处理端口冲突", port));
+            let _ = mark_runtime_error(&state.db_path, app_handle, service_id, None, None, None, &message);
+            let _ = append_history(&state.db_path, service_id, &service.name, "start", "failed", &message);
+            append_system_log(app_handle, &state.db_path, service_id, "error", &message);
+            let _ = app_handle.emit(SERVICE_OPERATION_FINISHED, "start-failed");
+            return Err(message);
         }
         info!("端口 {} 可用", port);
     }
@@ -318,8 +419,34 @@ pub fn start_service(app_handle: &AppHandle, service_id: &str) -> AppResult<Serv
     };
     starting = persist_runtime(&state.db_path, &starting)?;
     emit_runtime(app_handle, &starting);
+    append_system_log(
+        app_handle,
+        &state.db_path,
+        service_id,
+        "info",
+        "开始启动服务，Launcher 正在等待进程完成初始化",
+    );
 
-    let child = spawn_service_process(&service)?;
+    let child = match spawn_service_process(&service) {
+        Ok(child) => child,
+        Err(error) => {
+            let message = format!("服务进程创建失败：{}", error);
+            error!("{}", message);
+            let _ = mark_runtime_error(
+                &state.db_path,
+                app_handle,
+                service_id,
+                None,
+                starting.started_at.clone(),
+                None,
+                &message,
+            );
+            let _ = append_history(&state.db_path, service_id, &service.name, "start", "failed", &message);
+            append_system_log(app_handle, &state.db_path, service_id, "error", &message);
+            let _ = app_handle.emit(SERVICE_OPERATION_FINISHED, "start-failed");
+            return Err(message);
+        }
+    };
     let mut child_guard = child.lock();
     let pid = child_guard.id();
     let stdout = child_guard.stdout.take();
@@ -371,6 +498,13 @@ pub fn start_service(app_handle: &AppHandle, service_id: &str) -> AppResult<Serv
         "success",
         "服务启动成功",
     )?;
+    append_system_log(
+        app_handle,
+        &state.db_path,
+        service_id,
+        "info",
+        &format!("服务启动成功，当前 PID 为 {}", pid),
+    );
     let _ = app_handle.emit(SERVICE_OPERATION_FINISHED, "start");
     emit_runtime(app_handle, &runtime);
     Ok(runtime)
@@ -406,6 +540,17 @@ pub fn stop_service(app_handle: &AppHandle, service_id: &str, force: bool) -> Ap
     };
     runtime = persist_runtime(&state.db_path, &runtime)?;
     emit_runtime(app_handle, &runtime);
+    append_system_log(
+        app_handle,
+        &state.db_path,
+        service_id,
+        "info",
+        if force {
+            "正在强制结束服务进程"
+        } else {
+            "正在尝试优雅停止服务"
+        },
+    );
 
     if let Some(pid) = pid_to_stop {
         let stop_result = (|| {
@@ -464,6 +609,7 @@ pub fn stop_service(app_handle: &AppHandle, service_id: &str, force: bool) -> Ap
                 SERVICE_OPERATION_FINISHED,
                 if force { "kill-failed" } else { "stop-failed" },
             );
+            append_system_log(app_handle, &state.db_path, service_id, "error", &rollback_message);
 
             let _ = rollback_runtime_after_stop_failure(
                 &state.db_path,
@@ -482,6 +628,19 @@ pub fn stop_service(app_handle: &AppHandle, service_id: &str, force: bool) -> Ap
         }
     } else {
         let rollback_message = "当前服务没有记录到可停止的进程 PID，请先刷新状态后再试".to_string();
+        let _ = append_history(
+            &state.db_path,
+            service_id,
+            &service.name,
+            if force { "kill" } else { "stop" },
+            "failed",
+            &rollback_message,
+        );
+        append_system_log(app_handle, &state.db_path, service_id, "error", &rollback_message);
+        let _ = app_handle.emit(
+            SERVICE_OPERATION_FINISHED,
+            if force { "kill-failed" } else { "stop-failed" },
+        );
         let _ = rollback_runtime_after_stop_failure(
             &state.db_path,
             app_handle,
@@ -518,6 +677,13 @@ pub fn stop_service(app_handle: &AppHandle, service_id: &str, force: bool) -> Ap
         "success",
         &runtime.status_message,
     )?;
+    append_system_log(
+        app_handle,
+        &state.db_path,
+        service_id,
+        "info",
+        &runtime.status_message,
+    );
     let _ = app_handle.emit(SERVICE_OPERATION_FINISHED, if force { "kill" } else { "stop" });
     emit_runtime(app_handle, &runtime);
     Ok(runtime)

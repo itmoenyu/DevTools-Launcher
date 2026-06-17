@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 
 import {
   getAppSettings,
+  inspectPorts,
   listLaunchGroups,
   listServices,
   onLogAppended,
@@ -12,6 +13,10 @@ import {
 } from '@/services/tauri-api/client'
 import { useLogStore } from '@/store/log-store'
 import { useServiceStore } from '@/store/service-store'
+import {
+  collectServicePorts,
+  mergePortInspectionItems,
+} from '@/utils/serviceStatusPresentation'
 
 export function useBootstrapData() {
   const setServices = useServiceStore((state) => state.setServices)
@@ -26,6 +31,22 @@ export function useBootstrapData() {
   useEffect(() => {
     let mounted = true
     const unlisteners: Array<() => void> = []
+
+    async function refreshManagedPorts(services: Awaited<ReturnType<typeof listServices>>) {
+      const managedPorts = collectServicePorts(services)
+
+      if (!managedPorts.length) {
+        return
+      }
+
+      const latestPorts = await inspectPorts(managedPorts)
+      if (!mounted) {
+        return
+      }
+
+      const currentPorts = useServiceStore.getState().ports
+      setPorts(mergePortInspectionItems(currentPorts, latestPorts))
+    }
 
     async function bootstrap() {
       setLoading(true)
@@ -46,6 +67,7 @@ export function useBootstrapData() {
         setLaunchGroups(groups)
         setHistory(history)
         setSettings(settings)
+        await refreshManagedPorts(services)
 
         unlisteners.push(await onServiceRuntimeChanged(updateRuntime))
         unlisteners.push(await onLogAppended(appendLog))
@@ -58,6 +80,7 @@ export function useBootstrapData() {
 
             setServices(services)
             setHistory(history)
+            await refreshManagedPorts(services)
           }),
         )
         unlisteners.push(

@@ -1,7 +1,6 @@
 import { LoadingOutlined } from '@ant-design/icons'
 import {
   Alert,
-  Badge,
   Button,
   Drawer,
   Form,
@@ -20,9 +19,11 @@ import {
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import ServiceRuntimeStatusIndicator from '@/components/common/ServiceRuntimeStatusIndicator'
 import {
   createCustomService,
   deleteService,
+  inspectPorts,
   listServices,
   restartService,
   startService,
@@ -31,8 +32,16 @@ import {
 } from '@/services/tauri-api/client'
 import { useAppStore } from '@/store/app-store'
 import { useServiceStore } from '@/store/service-store'
-import { formatStatus } from '@/utils/formatters'
 import type { ServicePayload, ServiceWithRuntime } from '@/types/service'
+import {
+  collectServicePorts,
+  getFriendlyServiceActionError,
+  getServiceActionAvailability,
+  getServiceInstanceSourceExplanation,
+  getServiceLifecycleExplanation,
+  getServiceStatusPresentation,
+  mergePortInspectionItems,
+} from '@/utils/serviceStatusPresentation'
 
 const defaultFormValue: ServicePayload = {
   name: '',
@@ -51,32 +60,6 @@ function isServiceConfigured(record: ServiceWithRuntime) {
   return Boolean(record.service.execPath.trim() && record.service.workDir.trim())
 }
 
-function getFriendlyActionError(action: 'start' | 'stop' | 'restart', error: unknown) {
-  const rawMessage = error instanceof Error ? error.message : `${action}失败`
-
-  if (rawMessage.includes('缺少 exe 路径或工作目录')) {
-    return '当前服务还没配置完整。请先点“编辑”，补齐可执行文件路径和工作目录后再启动。'
-  }
-
-  if (rawMessage.includes('可执行文件不存在')) {
-    return `${rawMessage}。这通常表示你移动了安装目录，或者路径填成了旧位置。`
-  }
-
-  if (rawMessage.includes('端口') && rawMessage.includes('已被占用')) {
-    return `${rawMessage}。这通常表示服务已经被手动终端、系统服务或其他工具启动了，请先关闭外部实例后再交给面板托管。`
-  }
-
-  if (rawMessage.includes('没有记录到可停止的进程 PID')) {
-    return '当前没有可由 Launcher 接管的进程记录。只有通过面板启动的服务，面板才能稳定停止。'
-  }
-
-  if (rawMessage.includes('未能结束进程 PID') || rawMessage.includes('尝试强制结束 PID')) {
-    return `${rawMessage}。你可以先去任务管理器确认该进程是否仍在运行。`
-  }
-
-  return rawMessage
-}
-
 function getServiceGuide(serviceType: ServicePayload['serviceType']) {
   if (serviceType === 'redis') {
     return 'Redis 推荐填写 redis-server.exe 的完整路径；工作目录建议填写 exe 所在目录。若你使用 redis.windows.conf，可把 --port 6379 或配置文件参数写进启动参数。'
@@ -92,20 +75,44 @@ function getServiceGuide(serviceType: ServicePayload['serviceType']) {
 export function ServiceListPageMain() {
   const navigate = useNavigate()
   const services = useServiceStore((state) => state.services)
+  const ports = useServiceStore((state) => state.ports)
   const setServices = useServiceStore((state) => state.setServices)
+  const setPorts = useServiceStore((state) => state.setPorts)
   const setSelectedServiceId = useAppStore((state) => state.setSelectedServiceId)
   const [messageApi, contextHolder] = message.useMessage()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingService, setEditingService] = useState<ServiceWithRuntime | null>(null)
   const [actionLoadingKey, setActionLoadingKey] = useState<string | null>(null)
+  const [tableLoading, setTableLoading] = useState(false)
+  const [submitLoading, setSubmitLoading] = useState(false)
   const [form] = Form.useForm<ServicePayload>()
   const serviceType = Form.useWatch('serviceType', form) ?? defaultFormValue.serviceType
 
   const serviceRows = useMemo(() => services, [services])
 
-  async function refreshServiceList() {
-    const result = await listServices()
-    setServices(result)
+  async function refreshServiceList(successMessage?: string) {
+    setTableLoading(true)
+
+    try {
+      const result = await listServices()
+      setServices(result)
+
+      const managedPorts = collectServicePorts(result)
+      if (managedPorts.length) {
+        const latestPorts = await inspectPorts(managedPorts)
+        setPorts(mergePortInspectionItems(useServiceStore.getState().ports, latestPorts))
+      }
+
+      if (successMessage) {
+        messageApi.success(successMessage)
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '刷新服务列表失败'
+      messageApi.error(errorMessage)
+      throw error
+    } finally {
+      setTableLoading(false)
+    }
   }
 
   function openCreateDrawer() {
@@ -132,33 +139,46 @@ export function ServiceListPageMain() {
   }
 
   async function handleSubmit() {
-    const values = await form.validateFields()
-    const payload: ServicePayload = {
-      ...defaultFormValue,
-      ...values,
-      args: (values.args ?? []).filter(Boolean),
-      env: values.env ?? {},
-      stopStrategy: values.stopStrategy ?? defaultFormValue.stopStrategy,
-      healthcheckStrategy:
-        values.healthcheckStrategy ?? defaultFormValue.healthcheckStrategy,
-    }
+    setSubmitLoading(true)
 
-    if (editingService) {
-      await updateService({ ...payload, id: editingService.service.id })
-      messageApi.success('服务配置已更新')
-    } else {
+    try {
+      const values = await form.validateFields()
+      const payload: ServicePayload = {
+        ...defaultFormValue,
+        ...values,
+        args: (values.args ?? []).filter(Boolean),
+        env: values.env ?? {},
+        stopStrategy: values.stopStrategy ?? defaultFormValue.stopStrategy,
+        healthcheckStrategy:
+          values.healthcheckStrategy ?? defaultFormValue.healthcheckStrategy,
+      }
+
+      if (editingService) {
+        await updateService({ ...payload, id: editingService.service.id })
+        setDrawerOpen(false)
+        await refreshServiceList('服务配置已更新')
+        return
+      }
+
       await createCustomService(payload)
-      messageApi.success('自定义服务已创建')
+      setDrawerOpen(false)
+      await refreshServiceList('自定义服务已创建')
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '保存服务配置失败'
+      messageApi.error(errorMessage)
+    } finally {
+      setSubmitLoading(false)
     }
-
-    setDrawerOpen(false)
-    await refreshServiceList()
   }
 
   async function handleDelete(serviceId: string) {
-    await deleteService(serviceId)
-    messageApi.success('服务已删除')
-    await refreshServiceList()
+    try {
+      await deleteService(serviceId)
+      await refreshServiceList('服务已删除')
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '删除服务失败'
+      messageApi.error(errorMessage)
+    }
   }
 
   async function handleAction(serviceId: string, action: 'start' | 'stop' | 'restart') {
@@ -182,9 +202,10 @@ export function ServiceListPageMain() {
         await restartService(serviceId)
       }
 
-      messageApi.success(`${actionTextMap[action]}成功`)
+      await refreshServiceList(`${actionTextMap[action]}成功`)
     } catch (error) {
-      messageApi.error(getFriendlyActionError(action, error))
+      const errorMessage = getFriendlyServiceActionError(action, error)
+      messageApi.error(errorMessage)
     } finally {
       setActionLoadingKey(null)
     }
@@ -209,15 +230,9 @@ export function ServiceListPageMain() {
           </Button>
         </Space>
       </div>
-      <Alert
-        type="info"
-        showIcon
-        className="glass-card"
-        message="Launcher 更适合托管由面板自己启动的服务"
-        description="如果 Redis、MySQL 已经被系统服务、命令行窗口或其他工具启动，占用端口后，面板会拒绝再次启动；只有通过面板启动的那一份进程，面板才能稳定停止和重启。"
-      />
       <div className="glass-card table-card">
         <Table
+          loading={tableLoading}
           rowKey={(record) => record.service.id}
           dataSource={serviceRows}
           columns={[
@@ -258,40 +273,30 @@ export function ServiceListPageMain() {
               ),
             },
             { title: '端口', render: (_, record) => record.service.port ?? '--' },
+            {
+              title: '实例来源',
+              render: (_, record) => {
+                const sourceExplanation = getServiceInstanceSourceExplanation(record, ports)
+
+                return (
+                  <Tooltip title={sourceExplanation.detail}>
+                    <Tag color={sourceExplanation.tone === 'success' ? 'success' : sourceExplanation.tone === 'warning' ? 'warning' : 'default'}>
+                      {sourceExplanation.label}
+                    </Tag>
+                  </Tooltip>
+                )
+              },
+            },
             { title: 'PID', render: (_, record) => record.runtime.pid ?? '--' },
             {
               title: '状态',
               render: (_, record) => {
-                const getStatusProps = () => {
-                  switch (record.runtime.status) {
-                    case 'running':
-                      return { status: 'success' as const }
-                    case 'error':
-                      return { status: 'error' as const }
-                    case 'starting':
-                    case 'stopping':
-                      return { status: 'processing' as const }
-                    case 'stopped':
-                    case 'unstarted':
-                    default:
-                      return { status: 'default' as const }
-                  }
-                }
+                const presentation = getServiceStatusPresentation(record, ports)
 
                 return (
-                  <Tooltip
-                    title={
-                      <Space orientation="vertical" size={2}>
-                        <Typography.Text style={{ color: 'rgba(255,255,255,0.85)' }}>
-                          {formatStatus(record.runtime.status)}
-                        </Typography.Text>
-                      </Space>
-                    }
-                  >
-                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, cursor: 'pointer' }}>
-                      <Badge {...getStatusProps()} />
-                    </div>
-                  </Tooltip>
+                  <ServiceRuntimeStatusIndicator
+                    presentation={presentation}
+                  />
                 )
               },
             },
@@ -301,12 +306,27 @@ export function ServiceListPageMain() {
                 const isStartLoading = actionLoadingKey === `${record.service.id}-start`
                 const isStopLoading = actionLoadingKey === `${record.service.id}-stop`
                 const isRestartLoading = actionLoadingKey === `${record.service.id}-restart`
+                const actionAvailability = getServiceActionAvailability(record, ports)
+                const startTooltipTitle = actionAvailability.startDisabled
+                  ? actionAvailability.startReason
+                  : isStartLoading
+                    ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
+                    : ''
+                const stopTooltipTitle = actionAvailability.stopDisabled
+                  ? actionAvailability.stopReason
+                  : isStopLoading
+                    ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
+                    : ''
+                const restartTooltipTitle = actionAvailability.restartDisabled
+                  ? actionAvailability.restartReason
+                  : isRestartLoading
+                    ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
+                    : ''
 
                 return (
                   <Space wrap>
                     <Tooltip 
-                      open={isStartLoading || (!isServiceConfigured(record) ? undefined : false)} 
-                      title={!isServiceConfigured(record) ? '请先补齐 exe 路径和工作目录' : isStartLoading ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+                      title={startTooltipTitle}
                       color="rgba(255, 255, 255, 0.15)"
                       overlayClassName="glass-tooltip"
                       overlayStyle={{
@@ -326,7 +346,7 @@ export function ServiceListPageMain() {
                       <span style={{ display: 'inline-block' }}>
                         <Button
                           size="small"
-                          disabled={isStartLoading || !isServiceConfigured(record) || record.runtime.status === 'running'}
+                          disabled={isStartLoading || actionAvailability.startDisabled}
                           onClick={() => void handleAction(record.service.id, 'start')}
                         >
                           启动
@@ -334,8 +354,7 @@ export function ServiceListPageMain() {
                       </span>
                     </Tooltip>
                     <Tooltip 
-                      open={isStopLoading || undefined} 
-                      title={isStopLoading ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+                      title={stopTooltipTitle}
                       color="rgba(255, 255, 255, 0.15)"
                       overlayClassName="glass-tooltip"
                       overlayStyle={{
@@ -355,7 +374,7 @@ export function ServiceListPageMain() {
                       <span style={{ display: 'inline-block' }}>
                         <Button
                           size="small"
-                          disabled={isStopLoading || (!record.runtime.pid && record.runtime.status !== 'running')}
+                          disabled={isStopLoading || actionAvailability.stopDisabled}
                           onClick={() => void handleAction(record.service.id, 'stop')}
                         >
                           停止
@@ -363,8 +382,7 @@ export function ServiceListPageMain() {
                       </span>
                     </Tooltip>
                     <Tooltip 
-                      open={isRestartLoading || undefined} 
-                      title={isRestartLoading ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+                      title={restartTooltipTitle}
                       color="rgba(255, 255, 255, 0.15)"
                       overlayClassName="glass-tooltip"
                       overlayStyle={{
@@ -384,7 +402,7 @@ export function ServiceListPageMain() {
                       <span style={{ display: 'inline-block' }}>
                         <Button
                           size="small"
-                          disabled={isRestartLoading || !isServiceConfigured(record)}
+                          disabled={isRestartLoading || actionAvailability.restartDisabled}
                           onClick={() => void handleAction(record.service.id, 'restart')}
                         >
                           重启
@@ -421,6 +439,12 @@ export function ServiceListPageMain() {
                 <Typography.Text>
                   启动参数：{record.service.args.join(' ') || '暂无参数'}
                 </Typography.Text>
+                <Typography.Text>
+                  生命周期说明：{getServiceLifecycleExplanation(record, ports).detail}
+                </Typography.Text>
+                <Typography.Text>
+                  实例来源说明：{getServiceInstanceSourceExplanation(record, ports).detail}
+                </Typography.Text>
                 <Typography.Text type="secondary">
                   托管说明：{getServiceGuide(record.service.serviceType)}
                 </Typography.Text>
@@ -436,7 +460,7 @@ export function ServiceListPageMain() {
         onClose={() => setDrawerOpen(false)}
         size="large"
         extra={
-          <Button type="primary" onClick={() => void handleSubmit()}>
+          <Button type="primary" loading={submitLoading} onClick={() => void handleSubmit()}>
             保存
           </Button>
         }

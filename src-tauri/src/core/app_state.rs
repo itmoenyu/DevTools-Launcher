@@ -1,4 +1,11 @@
-use std::{collections::HashMap, process::Child, sync::Arc};
+use std::{
+    collections::HashMap,
+    process::Child,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use parking_lot::Mutex;
 
@@ -12,6 +19,7 @@ pub struct ManagedChild {
 pub struct AppState {
     pub db_path: String,
     pub children: Arc<Mutex<HashMap<String, ManagedChild>>>,
+    pub exiting: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -19,6 +27,11 @@ impl AppState {
         Self {
             db_path,
             children: Arc::new(Mutex::new(HashMap::new())),
+            exiting: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    pub fn begin_exit(&self) -> bool {
+        !self.exiting.swap(true, Ordering::SeqCst)
     }
 }

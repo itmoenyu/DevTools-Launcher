@@ -28,6 +28,10 @@ pub mod logs {
     pub mod log_streamer;
 }
 
+pub mod lifecycle {
+    pub mod app_lifecycle_manager;
+}
+
 pub mod port {
     pub mod port_detector;
     pub mod process_lookup;
@@ -106,6 +110,9 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_title("DevTools Launcher");
             }
+
+            lifecycle::app_lifecycle_manager::apply_launch_window_behavior(&app.handle())?;
+            info!("启动窗口行为已应用");
 
             Ok(())
         })

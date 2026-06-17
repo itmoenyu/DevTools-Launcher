@@ -1,9 +1,17 @@
-import { Badge, Button, Card, Col, Row, Space, Statistic, Table, Typography, message, Tooltip } from 'antd'
-import { useMemo } from 'react'
+import { Alert, Button, Card, Col, Row, Space, Statistic, Table, Tooltip, Typography, message } from 'antd'
+import { useMemo, useState } from 'react'
 
+import ServiceRuntimeStatusIndicator from '@/components/common/ServiceRuntimeStatusIndicator'
 import { inspectPorts, startService, stopService } from '@/services/tauri-api/client'
 import { useServiceStore } from '@/store/service-store'
-import { formatDateTime, formatStatus } from '@/utils/formatters'
+import { formatDateTime } from '@/utils/formatters'
+import {
+  getFriendlyServiceActionError,
+  getServiceActionAvailability,
+  getServiceInstanceSourceExplanation,
+  getServiceLifecycleExplanation,
+  getServiceStatusPresentation,
+} from '@/utils/serviceStatusPresentation'
 
 const commonPorts = [3306, 6379, 8080, 9000]
 
@@ -13,10 +21,14 @@ export function DashboardPageMain() {
   const ports = useServiceStore((state) => state.ports)
   const setPorts = useServiceStore((state) => state.setPorts)
   const [messageApi, contextHolder] = message.useMessage()
+  const [refreshingPorts, setRefreshingPorts] = useState(false)
+  const [batchAction, setBatchAction] = useState<'start' | 'stop' | null>(null)
+  const [pageError, setPageError] = useState<string | null>(null)
 
   const summary = useMemo(() => {
-    const runningServices = services.filter((item) => item.runtime.status === 'running').length
-    const errorServices = services.filter((item) => item.runtime.status === 'error').length
+    const presentations = services.map((item) => getServiceStatusPresentation(item, ports))
+    const runningServices = presentations.filter((item) => item.code === 'running').length
+    const errorServices = presentations.filter((item) => item.hasIssue).length
     const occupiedPorts = ports.filter((item) => item.occupied).length
 
     return {
@@ -28,27 +40,84 @@ export function DashboardPageMain() {
   }, [ports, services])
 
   async function refreshPorts() {
-    const result = await inspectPorts(commonPorts)
-    setPorts(result)
-    messageApi.success('常用端口扫描完成')
+    setRefreshingPorts(true)
+    setPageError(null)
+
+    try {
+      const result = await inspectPorts(commonPorts)
+      setPorts(result)
+      messageApi.success(`常用端口扫描完成，共检查 ${result.length} 个端口`)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '常用端口扫描失败'
+      setPageError(errorMessage)
+      messageApi.error(errorMessage)
+    } finally {
+      setRefreshingPorts(false)
+    }
   }
 
   async function startAllServices() {
-    try {
-      await Promise.all(services.map((item) => startService(item.service.id)))
-      messageApi.success('全部启动成功')
-    } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : '批量启动失败')
+    setBatchAction('start')
+    setPageError(null)
+
+    const candidates = services.filter(
+      (item) => !getServiceActionAvailability(item, ports).startDisabled,
+    )
+
+    if (!candidates.length) {
+      const errorMessage = '当前没有可以批量启动的服务。常见原因是服务已在运行、仍在切换状态，或配置还没补齐。'
+      setPageError(errorMessage)
+      messageApi.warning(errorMessage)
+      setBatchAction(null)
+      return
     }
+
+    const results = await Promise.allSettled(candidates.map((item) => startService(item.service.id)))
+    const failedResults = results.filter((item) => item.status === 'rejected')
+
+    if (!failedResults.length) {
+      messageApi.success(`批量启动完成，成功 ${results.length} 项`)
+      setBatchAction(null)
+      return
+    }
+
+    const firstError = getFriendlyServiceActionError('start', failedResults[0].reason)
+    const errorMessage = `批量启动已完成：成功 ${results.length - failedResults.length} 项，失败 ${failedResults.length} 项。首个失败原因：${firstError}`
+    setPageError(errorMessage)
+    messageApi.error(errorMessage)
+    setBatchAction(null)
   }
 
   async function stopAllServices() {
-    try {
-      await Promise.all(services.map((item) => stopService(item.service.id)))
-      messageApi.success('全部停止成功')
-    } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : '批量停止失败')
+    setBatchAction('stop')
+    setPageError(null)
+
+    const candidates = services.filter(
+      (item) => !getServiceActionAvailability(item, ports).stopDisabled,
+    )
+
+    if (!candidates.length) {
+      const errorMessage = '当前没有可以批量停止的服务。只有已经被 Launcher 托管并记录到 PID 的实例，才能稳定执行批量停止。'
+      setPageError(errorMessage)
+      messageApi.warning(errorMessage)
+      setBatchAction(null)
+      return
     }
+
+    const results = await Promise.allSettled(candidates.map((item) => stopService(item.service.id)))
+    const failedResults = results.filter((item) => item.status === 'rejected')
+
+    if (!failedResults.length) {
+      messageApi.success(`批量停止完成，成功 ${results.length} 项`)
+      setBatchAction(null)
+      return
+    }
+
+    const firstError = getFriendlyServiceActionError('stop', failedResults[0].reason)
+    const errorMessage = `批量停止已完成：成功 ${results.length - failedResults.length} 项，失败 ${failedResults.length} 项。首个失败原因：${firstError}`
+    setPageError(errorMessage)
+    messageApi.error(errorMessage)
+    setBatchAction(null)
   }
 
   return (
@@ -64,34 +133,57 @@ export function DashboardPageMain() {
           </Typography.Text>
         </div>
         <Space>
-          <Button onClick={() => void refreshPorts()}>扫描端口</Button>
-          <Button type="primary" onClick={() => void startAllServices()}>
+          <Button loading={refreshingPorts} onClick={() => void refreshPorts()}>
+            扫描端口
+          </Button>
+          <Button type="primary" loading={batchAction === 'start'} onClick={() => void startAllServices()}>
             启动全部
           </Button>
-          <Button danger onClick={() => void stopAllServices()}>
+          <Button danger loading={batchAction === 'stop'} onClick={() => void stopAllServices()}>
             停止全部
           </Button>
         </Space>
       </div>
+      {pageError ? (
+        <Alert
+          type="error"
+          showIcon
+          className="glass-card"
+          message="最近一次仪表盘操作失败"
+          description={pageError}
+        />
+      ) : null}
       <Row gutter={[16, 16]}>
         <Col span={6}>
           <Card className="glass-card metric-card">
             <Statistic title="服务总数" value={summary.totalServices} />
+            <Typography.Text type="secondary">
+              已登记到 Launcher 的全部服务配置。
+            </Typography.Text>
           </Card>
         </Col>
         <Col span={6}>
           <Card className="glass-card metric-card">
             <Statistic title="运行中服务" value={summary.runningServices} />
+            <Typography.Text type="secondary">
+              托管记录与现场状态一致的运行实例。
+            </Typography.Text>
           </Card>
         </Col>
         <Col span={6}>
           <Card className="glass-card metric-card">
             <Statistic title="端口占用数" value={summary.occupiedPorts} />
+            <Typography.Text type="secondary">
+              当前被扫描到存在进程占用的端口数量。
+            </Typography.Text>
           </Card>
         </Col>
         <Col span={6}>
           <Card className="glass-card metric-card">
             <Statistic title="异常服务" value={summary.errorServices} />
+            <Typography.Text type="secondary">
+              包含端口冲突、异常状态等需要关注的问题。
+            </Typography.Text>
           </Card>
         </Col>
       </Row>
@@ -109,35 +201,23 @@ export function DashboardPageMain() {
               {
                 title: '状态',
                 render: (_, record) => {
-                  const getStatusProps = () => {
-                    switch (record.runtime.status) {
-                      case 'running':
-                        return { status: 'success' as const }
-                      case 'error':
-                        return { status: 'error' as const }
-                      case 'starting':
-                      case 'stopping':
-                        return { status: 'processing' as const }
-                      case 'stopped':
-                      case 'unstarted':
-                      default:
-                        return { status: 'default' as const }
-                    }
-                  }
+                  const presentation = getServiceStatusPresentation(record, ports)
 
                   return (
-                    <Tooltip
-                      title={
-                        <Space orientation="vertical" size={2}>
-                          <Typography.Text style={{ color: 'rgba(255,255,255,0.85)' }}>
-                            {formatStatus(record.runtime.status)}
-                          </Typography.Text>
-                        </Space>
-                      }
-                    >
-                      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, cursor: 'pointer' }}>
-                        <Badge {...getStatusProps()} />
-                      </div>
+                    <ServiceRuntimeStatusIndicator
+                      presentation={presentation}
+                    />
+                  )
+                },
+              },
+              {
+                title: '实例来源',
+                render: (_, record) => {
+                  const sourceExplanation = getServiceInstanceSourceExplanation(record, ports)
+
+                  return (
+                    <Tooltip title={sourceExplanation.detail}>
+                      <Typography.Text strong>{sourceExplanation.label}</Typography.Text>
                     </Tooltip>
                   )
                 },
@@ -159,6 +239,11 @@ export function DashboardPageMain() {
                 </div>
               </div>
             ))}
+            {!history.length ? (
+              <Typography.Text type="secondary">
+                还没有最近活动记录；后续启动、停止、重启或保存配置后，会按时间倒序展示在这里。
+              </Typography.Text>
+            ) : null}
           </div>
         </Card>
       </div>
