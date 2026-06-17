@@ -98,21 +98,20 @@ export function RealtimeLogPageMain() {
       </div>
       <Card className="glass-card table-card">
         {selectedServiceId ? (
-          <div className="log-console">
-            {loading ? (
-              <div className="page-loading" style={{ minHeight: 200 }}>
-                <Spin />
-              </div>
-            ) : filteredLogs.length ? (
-              filteredLogs.map((item) => (
-                <p key={item.id} className="log-line mono-text">
-                  [{formatDateTime(item.createdAt)}] [{item.streamType}] {item.content}
-                </p>
-              ))
-            ) : (
-              <Empty description="当前没有匹配的日志内容" />
-            )}
-          </div>
+          loading ? (
+            <div className="page-loading" style={{ minHeight: 200 }}>
+              <Spin />
+            </div>
+          ) : filteredLogs.length ? (
+            <Input.TextArea
+              readOnly
+              value={filteredLogs.map((item) => `[${formatDateTime(item.createdAt)}] [${item.streamType}] ${item.content}`).join('\n')}
+              className="mono-text glass-panel"
+              style={{ height: 560, resize: 'none', backdropFilter: 'none' }}
+            />
+          ) : (
+            <Empty description="当前没有匹配的日志内容" />
+          )
         ) : (
           <Empty description="请先选择一个服务" />
         )}

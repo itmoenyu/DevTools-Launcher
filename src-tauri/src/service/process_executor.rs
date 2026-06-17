@@ -57,6 +57,13 @@ fn normalize_launch_args(service: &ServiceDefinition) -> Vec<String> {
         index += 1;
     }
 
+    // 对于 Windows 上的 MySQL，默认会把日志写到 my.ini 里配置的 log-error 文件中。
+    // 这会导致 Launcher 无法通过 stdout/stderr 捕获到日志。
+    // 追加 --console 参数强制 MySQL 把日志输出到控制台，从而让 Launcher 能正常采集并展示在界面上。
+    if !prioritized.contains(&"--console".to_string()) && !remaining.contains(&"--console".to_string()) {
+        remaining.push("--console".to_string());
+    }
+
     prioritized.extend(remaining);
     prioritized
 }

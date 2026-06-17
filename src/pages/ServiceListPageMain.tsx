@@ -1,5 +1,6 @@
 import {
   Alert,
+  Badge,
   Button,
   Drawer,
   Form,
@@ -28,6 +29,7 @@ import {
 } from '@/services/tauri-api/client'
 import { useAppStore } from '@/store/app-store'
 import { useServiceStore } from '@/store/service-store'
+import { formatStatus } from '@/utils/formatters'
 import type { ServicePayload, ServiceWithRuntime } from '@/types/service'
 
 const defaultFormValue: ServicePayload = {
@@ -257,24 +259,39 @@ export function ServiceListPageMain() {
             { title: 'PID', render: (_, record) => record.runtime.pid ?? '--' },
             {
               title: '状态',
-              render: (_, record) => (
-                <Space orientation="vertical" size={4}>
-                  <Tag
-                    color={
-                      record.runtime.status === 'running'
-                        ? 'success'
-                        : record.runtime.status === 'error'
-                          ? 'error'
-                          : 'default'
+              render: (_, record) => {
+                const getStatusProps = () => {
+                  switch (record.runtime.status) {
+                    case 'running':
+                      return { status: 'success' as const }
+                    case 'error':
+                      return { status: 'error' as const }
+                    case 'starting':
+                    case 'stopping':
+                      return { status: 'processing' as const }
+                    case 'stopped':
+                    case 'unstarted':
+                    default:
+                      return { status: 'default' as const }
+                  }
+                }
+
+                return (
+                  <Tooltip
+                    title={
+                      <Space orientation="vertical" size={2}>
+                        <Typography.Text style={{ color: 'rgba(255,255,255,0.85)' }}>
+                          {formatStatus(record.runtime.status)}
+                        </Typography.Text>
+                      </Space>
                     }
                   >
-                    {record.runtime.status}
-                  </Tag>
-                  <Typography.Text type="secondary">
-                    {record.runtime.statusMessage || '暂无状态说明'}
-                  </Typography.Text>
-                </Space>
-              ),
+                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, cursor: 'pointer' }}>
+                      <Badge {...getStatusProps()} />
+                    </div>
+                  </Tooltip>
+                )
+              },
             },
             {
               title: '操作',

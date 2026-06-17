@@ -1,9 +1,9 @@
-import { Button, Card, Col, Row, Space, Statistic, Table, Typography, message } from 'antd'
+import { Badge, Button, Card, Col, Row, Space, Statistic, Table, Typography, message, Tooltip } from 'antd'
 import { useMemo } from 'react'
 
 import { inspectPorts, startService, stopService } from '@/services/tauri-api/client'
 import { useServiceStore } from '@/store/service-store'
-import { formatDateTime } from '@/utils/formatters'
+import { formatDateTime, formatStatus } from '@/utils/formatters'
 
 const commonPorts = [3306, 6379, 8080, 9000]
 
@@ -106,7 +106,42 @@ export function DashboardPageMain() {
               { title: '类型', dataIndex: ['service', 'serviceType'] },
               { title: '端口', render: (_, record) => record.service.port ?? '--' },
               { title: 'PID', render: (_, record) => record.runtime.pid ?? '--' },
-              { title: '状态', render: (_, record) => record.runtime.status },
+              {
+                title: '状态',
+                render: (_, record) => {
+                  const getStatusProps = () => {
+                    switch (record.runtime.status) {
+                      case 'running':
+                        return { status: 'success' as const }
+                      case 'error':
+                        return { status: 'error' as const }
+                      case 'starting':
+                      case 'stopping':
+                        return { status: 'processing' as const }
+                      case 'stopped':
+                      case 'unstarted':
+                      default:
+                        return { status: 'default' as const }
+                    }
+                  }
+
+                  return (
+                    <Tooltip
+                      title={
+                        <Space orientation="vertical" size={2}>
+                          <Typography.Text style={{ color: 'rgba(255,255,255,0.85)' }}>
+                            {formatStatus(record.runtime.status)}
+                          </Typography.Text>
+                        </Space>
+                      }
+                    >
+                      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, cursor: 'pointer' }}>
+                        <Badge {...getStatusProps()} />
+                      </div>
+                    </Tooltip>
+                  )
+                },
+              },
             ]}
           />
         </Card>

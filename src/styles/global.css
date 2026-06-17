@@ -135,22 +135,6 @@ body {
     monospace;
 }
 
-.log-console {
-  height: 560px;
-  overflow: auto;
-  padding: 16px;
-  border-radius: 16px;
-  background: rgba(6, 10, 20, 0.58);
-  border: var(--glass-border);
-  box-shadow: var(--glass-shadow);
-}
-
-.log-line {
-  margin: 0;
-  white-space: pre-wrap;
-  font-size: 13px;
-  line-height: 1.6;
-}
 
 .settings-grid {
   display: grid;
@@ -164,8 +148,37 @@ body {
 .ant-statistic,
 .ant-form,
 .ant-card-head,
-.ant-card-body {
+.ant-card-body,
+.ant-input {
   background: transparent !important;
+}
+
+.ant-input.glass-panel {
+  box-shadow: 
+    0 16px 24px -8px rgba(0, 0, 0, 0.15),
+    0 6px 12px -4px rgba(0, 0, 0, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.6),
+    inset 0 0 3px 1px rgba(24, 144, 255, 0.25) !important;
+  border-color: rgba(24, 144, 255, 0.3) !important;
+  background: color-mix(in srgb, #ffffff 60%, transparent) !important;
+  border-radius: 12px !important;
+}
+
+.ant-input.glass-panel:focus,
+.ant-input.glass-panel-focused {
+  box-shadow: 
+    0 16px 24px -8px rgba(0, 0, 0, 0.15),
+    0 6px 12px -4px rgba(0, 0, 0, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.6),
+    inset 0 0 3px 1px rgba(24, 144, 255, 0.25) !important;
+  outline: none !important;
+  background: color-mix(in srgb, #ffffff 60%, transparent) !important;
+}
+
+/* 放大状态点 */
+.ant-badge-status-dot {
+  width: 12px !important;
+  height: 12px !important;
 }
 
 .ant-table-thead > tr > th,

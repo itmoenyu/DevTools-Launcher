@@ -293,7 +293,7 @@ pub fn start_service(app_handle: &AppHandle, service_id: &str) -> AppResult<Serv
         stopped_at: None,
         exit_code: None,
         last_heartbeat_at: Some(now()),
-        status_message: "服务已静默启动".to_string(),
+        status_message: "运行中".to_string(),
     };
     let runtime = persist_runtime(&state.db_path, &runtime)?;
     append_history(

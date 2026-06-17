@@ -33,7 +33,7 @@ fn default_runtime(service_id: &str) -> ServiceRuntime {
     ServiceRuntime {
         service_id: service_id.to_string(),
         pid: None,
-        status: "stopped".to_string(),
+        status: "unstarted".to_string(),
         started_at: None,
         stopped_at: None,
         exit_code: None,

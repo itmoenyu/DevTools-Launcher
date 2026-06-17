@@ -1,5 +1,18 @@
 import dayjs from 'dayjs'
 
+export const statusTextMap: Record<string, string> = {
+  unstarted: '未启动',
+  stopped: '已停止',
+  starting: '启动中',
+  running: '运行中',
+  stopping: '停止中',
+  error: '异常',
+}
+
+export function formatStatus(status: string) {
+  return statusTextMap[status] || status
+}
+
 export function formatDateTime(value: string | null) {
   if (!value) {
     return '--'

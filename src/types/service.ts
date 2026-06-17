@@ -1,6 +1,7 @@
 export type ServiceType = 'redis' | 'mysql' | 'custom'
 
 export type ServiceStatus =
+  | 'unstarted'
   | 'stopped'
   | 'starting'
   | 'running'

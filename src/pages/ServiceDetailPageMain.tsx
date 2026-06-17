@@ -1,4 +1,4 @@
-import { Button, Card, Descriptions, Empty, Space, Spin, Tag, Typography, message } from 'antd'
+import { Badge, Button, Card, Descriptions, Empty, Space, Spin, Tag, Typography, message, Input, Tooltip } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
@@ -12,7 +12,7 @@ import {
 } from '@/services/tauri-api/client'
 import { useAppStore } from '@/store/app-store'
 import { useLogStore } from '@/store/log-store'
-import { formatDateTime, formatDuration } from '@/utils/formatters'
+import { formatDateTime, formatDuration, formatStatus } from '@/utils/formatters'
 import type { ServiceWithRuntime } from '@/types/service'
 
 const actionTextMap = {
@@ -189,8 +189,34 @@ export function ServiceDetailPageMain() {
       </div>
       <Card className="glass-card table-card">
         <Space style={{ marginBottom: 16 }} wrap>
-          <Tag color={serviceDetail.runtime.status === 'running' ? 'success' : 'default'}>
-            当前状态：{serviceDetail.runtime.status}
+          <Tag>
+            当前状态：
+            <Tooltip
+              title={
+                <Space orientation="vertical" size={2}>
+                  <Typography.Text style={{ color: 'rgba(255,255,255,0.85)' }}>
+                    {formatStatus(serviceDetail.runtime.status)}
+                  </Typography.Text>
+                  <Typography.Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
+                    {serviceDetail.runtime.statusMessage || '暂无状态说明'}
+                  </Typography.Text>
+                </Space>
+              }
+            >
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, cursor: 'pointer', marginLeft: 4 }}>
+                <Badge
+                  status={
+                    serviceDetail.runtime.status === 'running'
+                      ? 'success'
+                      : serviceDetail.runtime.status === 'error'
+                        ? 'error'
+                        : ['starting', 'stopping'].includes(serviceDetail.runtime.status)
+                          ? 'processing'
+                          : 'default'
+                  }
+                />
+              </div>
+            </Tooltip>
           </Tag>
           <Tag color="blue">服务类型：{serviceDetail.service.serviceType}</Tag>
           <Tag>PID：{serviceDetail.runtime.pid ?? '--'}</Tag>
@@ -206,7 +232,38 @@ export function ServiceDetailPageMain() {
             { key: 'dir', label: '工作目录', children: serviceDetail.service.workDir },
             { key: 'port', label: '服务端口', children: serviceDetail.service.port ?? '--' },
             { key: 'pid', label: '运行 PID', children: serviceDetail.runtime.pid ?? '--' },
-            { key: 'status', label: '当前状态', children: serviceDetail.runtime.status },
+            {
+              key: 'status',
+              label: '当前状态',
+              children: (
+                <Tooltip
+                  title={
+                    <Space orientation="vertical" size={2}>
+                      <Typography.Text style={{ color: 'rgba(255,255,255,0.85)' }}>
+                        {formatStatus(serviceDetail.runtime.status)}
+                      </Typography.Text>
+                      <Typography.Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
+                        {serviceDetail.runtime.statusMessage || '暂无状态说明'}
+                      </Typography.Text>
+                    </Space>
+                  }
+                >
+                  <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, cursor: 'pointer' }}>
+                    <Badge
+                      status={
+                        serviceDetail.runtime.status === 'running'
+                          ? 'success'
+                          : serviceDetail.runtime.status === 'error'
+                            ? 'error'
+                            : ['starting', 'stopping'].includes(serviceDetail.runtime.status)
+                              ? 'processing'
+                              : 'default'
+                      }
+                    />
+                  </div>
+                </Tooltip>
+              ),
+            },
             {
               key: 'duration',
               label: '运行时长',
@@ -252,13 +309,12 @@ export function ServiceDetailPageMain() {
       </Card>
       <Card className="glass-card table-card" title="最近日志">
         {latestLogs.length ? (
-          <div className="log-console" style={{ height: 280 }}>
-            {latestLogs.map((item) => (
-              <p key={item.id} className="log-line mono-text">
-                [{formatDateTime(item.createdAt)}] [{item.streamType}] {item.content}
-              </p>
-            ))}
-          </div>
+          <Input.TextArea
+            readOnly
+            value={latestLogs.map((item) => `[${formatDateTime(item.createdAt)}] [${item.streamType}] ${item.content}`).join('\n')}
+            className="mono-text glass-panel"
+            style={{ height: 280, resize: 'none', backdropFilter: 'none' }}
+          />
         ) : (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前还没有日志记录" />
         )}
