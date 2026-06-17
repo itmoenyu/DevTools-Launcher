@@ -9,7 +9,6 @@ import {
   getFriendlyServiceActionError,
   getServiceActionAvailability,
   getServiceInstanceSourceExplanation,
-  getServiceLifecycleExplanation,
   getServiceStatusPresentation,
 } from '@/utils/serviceStatusPresentation'
 

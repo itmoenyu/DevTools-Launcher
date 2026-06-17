@@ -7,7 +7,6 @@ import { useServiceStore } from '@/store/service-store'
 import {
   findServiceByPort,
   getServiceInstanceSourceExplanation,
-  getServiceLifecycleExplanation,
   getServiceStatusPresentation,
 } from '@/utils/serviceStatusPresentation'
 
