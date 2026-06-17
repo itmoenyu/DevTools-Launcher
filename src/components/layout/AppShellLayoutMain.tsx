@@ -51,7 +51,7 @@ export function AppShellLayoutMain() {
         }}
       >
         <div style={{ padding: '20px 0', textAlign: 'center' }}>
-          <LogoIcon width={28} height={28} style={{ color: '#863bff' }} />
+          <LogoIcon width={48} height={48} />
         </div>
         <Menu
           mode="inline"

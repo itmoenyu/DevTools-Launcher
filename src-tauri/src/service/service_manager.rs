@@ -19,7 +19,7 @@ use crate::{
     logs::log_streamer::stream_process_logs,
     port::process_lookup::{inspect_port, process_exists},
     service::{
-        graceful_shutdown::stop_pid,
+        graceful_shutdown::{stop_pid, stop_redis_service},
         process_executor::spawn_service_process,
         process_tracker::{get_child, register_child, unregister_child},
     },
@@ -78,9 +78,31 @@ fn wait_for_process_exit(pid: u32, attempts: usize, wait_ms: u64) -> AppResult<b
 }
 
 fn should_force_stop_by_default(service: &crate::core::types::ServiceDefinition) -> bool {
-    // Redis 在 Windows 下通常需要 /F 才能稳定结束，
-    // 否则“停止”按钮会一直先撞到普通 taskkill 失败。
-    service.service_type == "redis" || service.stop_strategy == "taskkill_force"
+    service.stop_strategy == "taskkill_force"
+}
+
+fn try_graceful_stop(service: &crate::core::types::ServiceDefinition, pid: u32) -> AppResult<bool> {
+    if service.service_type == "redis" {
+        match stop_redis_service(service) {
+            Ok(true) => {
+                info!("已向 Redis 发送 SHUTDOWN 指令，等待 PID {} 自行退出", pid);
+                return wait_for_process_exit(pid, 15, 200);
+            }
+            Ok(false) => {
+                warn!("Redis 缺少可用端口信息，无法发送 SHUTDOWN，回退到进程结束策略");
+            }
+            Err(error) => {
+                warn!("Redis 优雅停止失败，将回退为进程结束策略: {}", error);
+            }
+        }
+    }
+
+    let graceful = stop_pid(pid, false)?;
+    if !graceful {
+        return Ok(false);
+    }
+
+    wait_for_process_exit(pid, 8, 200)
 }
 
 fn ensure_process_survives_startup(
@@ -340,8 +362,7 @@ pub fn stop_service(app_handle: &AppHandle, service_id: &str, force: bool) -> Ap
                 return Ok(());
             }
 
-            let graceful = stop_pid(pid, false)?;
-            if graceful && wait_for_process_exit(pid, 8, 200)? {
+            if try_graceful_stop(&service, pid)? {
                 return Ok(());
             }
 
