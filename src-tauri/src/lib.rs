@@ -100,6 +100,9 @@ pub fn run() {
             tray::tray_manager::setup_tray(&app.handle())?;
             info!("系统托盘初始化完成");
 
+            service::service_manager::reconcile_managed_services_on_startup(&app.handle())?;
+            info!("托管服务运行态校正完成");
+
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_title("DevTools Launcher");
             }

@@ -24,13 +24,14 @@ pub fn inspect_port(port: u16) -> AppResult<PortInspectionItem> {
 
         let pid = columns[4].parse::<u32>().ok();
         let process_name = pid.and_then(|pid| lookup_process_name(pid).ok());
+        let process_path = pid.and_then(|pid| lookup_process_path(pid).ok());
 
         return Ok(PortInspectionItem {
             port,
             occupied: true,
             pid,
             process_name,
-            process_path: None,
+            process_path,
         });
     }
 
@@ -77,8 +78,33 @@ pub fn lookup_process_name(pid: u32) -> AppResult<String> {
     Ok(columns.first().copied().unwrap_or_default().to_string())
 }
 
+pub fn lookup_process_path(pid: u32) -> AppResult<String> {
+    let command = format!(
+        "(Get-CimInstance Win32_Process -Filter \"ProcessId = {pid}\").ExecutablePath"
+    );
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &command])
+        .output()
+        .into_app_result()?;
+
+    if !output.status.success() {
+        return Ok(String::new());
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
 pub fn process_exists(pid: u32) -> AppResult<bool> {
     Ok(!lookup_process_name(pid)?.trim().is_empty())
+}
+
+pub fn process_matches_path(pid: u32, expected_path: &str) -> AppResult<bool> {
+    let actual_path = lookup_process_path(pid)?;
+    if actual_path.trim().is_empty() || expected_path.trim().is_empty() {
+        return Ok(false);
+    }
+
+    Ok(actual_path.eq_ignore_ascii_case(expected_path))
 }
 
 pub fn kill_process(pid: u32, force: bool) -> AppResult<bool> {

@@ -17,7 +17,7 @@ use crate::{
         service_repository::{get_runtime, get_service, list_services_with_runtime, update_runtime},
     },
     logs::log_streamer::stream_process_logs,
-    port::process_lookup::{inspect_port, process_exists},
+    port::process_lookup::{inspect_port, process_exists, process_matches_path},
     service::{
         graceful_shutdown::{stop_pid, stop_redis_service},
         process_executor::spawn_service_process,
@@ -36,6 +36,61 @@ fn emit_runtime(app_handle: &AppHandle, runtime: &ServiceRuntime) {
 fn persist_runtime(db_path: &str, runtime: &ServiceRuntime) -> AppResult<ServiceRuntime> {
     update_runtime(db_path, runtime)?;
     Ok(runtime.clone())
+}
+
+fn restore_running_runtime(
+    db_path: &str,
+    app_handle: &AppHandle,
+    service_id: &str,
+    pid: u32,
+    started_at: Option<String>,
+    message: &str,
+) -> AppResult<ServiceRuntime> {
+    let runtime = ServiceRuntime {
+        service_id: service_id.to_string(),
+        pid: Some(pid),
+        status: "running".to_string(),
+        started_at,
+        stopped_at: None,
+        exit_code: None,
+        last_heartbeat_at: Some(now()),
+        status_message: message.to_string(),
+    };
+    let runtime = persist_runtime(db_path, &runtime)?;
+    emit_runtime(app_handle, &runtime);
+    Ok(runtime)
+}
+
+fn mark_runtime_stopped(
+    db_path: &str,
+    app_handle: &AppHandle,
+    service_id: &str,
+    message: &str,
+) -> AppResult<ServiceRuntime> {
+    let runtime = ServiceRuntime {
+        service_id: service_id.to_string(),
+        pid: None,
+        status: "stopped".to_string(),
+        started_at: None,
+        stopped_at: Some(now()),
+        exit_code: None,
+        last_heartbeat_at: Some(now()),
+        status_message: message.to_string(),
+    };
+    let runtime = persist_runtime(db_path, &runtime)?;
+    emit_runtime(app_handle, &runtime);
+    Ok(runtime)
+}
+
+fn runtime_belongs_to_service(
+    service: &crate::core::types::ServiceDefinition,
+    pid: u32,
+) -> AppResult<bool> {
+    if !process_exists(pid)? {
+        return Ok(false);
+    }
+
+    process_matches_path(pid, &service.exec_path)
 }
 
 fn rollback_runtime_after_stop_failure(
@@ -203,6 +258,7 @@ pub fn start_service(app_handle: &AppHandle, service_id: &str) -> AppResult<Serv
     info!("正在启动服务: {}", service_id);
     let state = app_handle.state::<AppState>();
     let service = get_service(&state.db_path, service_id)?;
+    let current_runtime = get_runtime(&state.db_path, service_id)?;
 
     if service.exec_path.trim().is_empty() || service.work_dir.trim().is_empty() {
         warn!("服务配置不完整: {} (exe或工作目录为空)", service_id);
@@ -214,6 +270,32 @@ pub fn start_service(app_handle: &AppHandle, service_id: &str) -> AppResult<Serv
         return Err(format!("可执行文件不存在：{}", service.exec_path));
     }
 
+    if let Some(existing_child) = get_child(&state, service_id) {
+        let pid = existing_child.lock().id();
+        return restore_running_runtime(
+            &state.db_path,
+            app_handle,
+            service_id,
+            pid,
+            current_runtime.started_at.clone().or_else(|| Some(now())),
+            "服务已经在运行",
+        );
+    }
+
+    if let Some(pid) = current_runtime.pid {
+        if runtime_belongs_to_service(&service, pid)? {
+            info!("检测到服务 {} 的旧托管实例仍在运行，PID: {}", service.name, pid);
+            return restore_running_runtime(
+                &state.db_path,
+                app_handle,
+                service_id,
+                pid,
+                current_runtime.started_at.clone().or_else(|| Some(now())),
+                "检测到 Launcher 上次托管的实例仍在运行，已恢复接管",
+            );
+        }
+    }
+
     if let Some(port) = service.port {
         let port_info = inspect_port(port)?;
         if port_info.occupied {
@@ -222,21 +304,6 @@ pub fn start_service(app_handle: &AppHandle, service_id: &str) -> AppResult<Serv
             return Err(format!("端口 {} 已被占用，请先处理端口冲突", port));
         }
         info!("端口 {} 可用", port);
-    }
-
-    if let Some(existing_child) = get_child(&state, service_id) {
-        let pid = existing_child.lock().id();
-        let runtime = ServiceRuntime {
-            service_id: service_id.to_string(),
-            pid: Some(pid),
-            status: "running".to_string(),
-            started_at: Some(now()),
-            stopped_at: None,
-            exit_code: None,
-            last_heartbeat_at: Some(now()),
-            status_message: "服务已经在运行".to_string(),
-        };
-        return persist_runtime(&state.db_path, &runtime);
     }
 
     let mut starting = ServiceRuntime {
@@ -476,6 +543,78 @@ pub fn restart_service(app_handle: &AppHandle, service_id: &str) -> AppResult<Se
 pub fn get_service_runtime(app_handle: &AppHandle, service_id: &str) -> AppResult<ServiceRuntime> {
     let state = app_handle.state::<AppState>();
     get_runtime(&state.db_path, service_id)
+}
+
+pub fn reconcile_managed_services_on_startup(app_handle: &AppHandle) -> AppResult<()> {
+    let state = app_handle.state::<AppState>();
+    let services = list_services_with_runtime(&state.db_path)?;
+
+    for record in services {
+        let Some(pid) = record.runtime.pid else {
+            if matches!(record.runtime.status.as_str(), "running" | "starting" | "stopping") {
+                let _ = mark_runtime_stopped(
+                    &state.db_path,
+                    app_handle,
+                    &record.service.id,
+                    "应用重新启动后未找到有效 PID，已清理残留运行态",
+                );
+            }
+            continue;
+        };
+
+        if runtime_belongs_to_service(&record.service, pid)? {
+            let _ = restore_running_runtime(
+                &state.db_path,
+                app_handle,
+                &record.service.id,
+                pid,
+                record.runtime.started_at.clone(),
+                "检测到 Launcher 上次托管的实例仍在运行，已自动恢复状态",
+            );
+            continue;
+        }
+
+        let _ = mark_runtime_stopped(
+            &state.db_path,
+            app_handle,
+            &record.service.id,
+            "应用启动时发现旧运行态已失效，已自动清理",
+        );
+    }
+
+    Ok(())
+}
+
+pub fn shutdown_managed_services(app_handle: &AppHandle) -> AppResult<()> {
+    let state = app_handle.state::<AppState>();
+    let services = list_services_with_runtime(&state.db_path)?;
+    let mut failed = Vec::new();
+
+    for record in services {
+        let Some(pid) = record.runtime.pid else {
+            continue;
+        };
+
+        if !runtime_belongs_to_service(&record.service, pid)? {
+            let _ = mark_runtime_stopped(
+                &state.db_path,
+                app_handle,
+                &record.service.id,
+                "应用退出时发现旧运行态已失效，已自动清理",
+            );
+            continue;
+        }
+
+        if let Err(error) = stop_service(app_handle, &record.service.id, false) {
+            failed.push(format!("{}：{}", record.service.name, error));
+        }
+    }
+
+    if failed.is_empty() {
+        return Ok(());
+    }
+
+    Err(format!("应用退出前有服务未能自动停止：{}", failed.join("；")))
 }
 
 pub fn run_launch_group(app_handle: &AppHandle, group_id: &str) -> AppResult<Vec<ServiceRuntime>> {

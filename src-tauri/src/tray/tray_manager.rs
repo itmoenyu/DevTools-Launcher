@@ -7,8 +7,9 @@ use tauri::{
     tray::TrayIconBuilder,
     AppHandle, Manager, WindowEvent,
 };
+use tracing::warn;
 
-use crate::core::error::AppResult;
+use crate::{core::error::AppResult, service::service_manager::shutdown_managed_services};
 
 fn load_tray_icon() -> AppResult<Image<'static>> {
     let bytes = include_bytes!("../../icons/32x32.png");
@@ -64,7 +65,12 @@ pub fn setup_tray(app_handle: &AppHandle) -> AppResult<()> {
                     let _ = window.set_focus();
                 }
             }
-            "quit" => app.exit(0),
+            "quit" => {
+                if let Err(error) = shutdown_managed_services(app) {
+                    warn!("应用退出前自动停止托管服务时出现问题: {}", error);
+                }
+                app.exit(0)
+            }
             _ => {}
         })
         .build(app_handle)

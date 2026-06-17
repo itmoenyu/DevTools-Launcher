@@ -1,3 +1,4 @@
+import { LoadingOutlined } from '@ant-design/icons'
 import { Badge, Button, Card, Descriptions, Empty, Space, Spin, Tag, Typography, message, Input, Tooltip } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -173,18 +174,106 @@ export function ServiceDetailPageMain() {
           <Button loading={actionLoading === 'refresh'} onClick={() => void refreshDetail(serviceId)}>
             刷新
           </Button>
-          <Button loading={actionLoading === 'start'} onClick={() => void handleAction('start')}>
-            启动
-          </Button>
-          <Button loading={actionLoading === 'stop'} onClick={() => void handleAction('stop')}>
-            停止
-          </Button>
-          <Button loading={actionLoading === 'restart'} onClick={() => void handleAction('restart')}>
-            重启
-          </Button>
-          <Button danger loading={actionLoading === 'kill'} onClick={() => void handleAction('kill')}>
-            强制结束
-          </Button>
+          <Tooltip 
+            open={actionLoading === 'start' || undefined} 
+            title={actionLoading === 'start' ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+            color="rgba(255, 255, 255, 0.15)"
+            overlayClassName="glass-tooltip"
+            overlayStyle={{
+              backdropFilter: 'blur(12px)',
+              boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
+              borderRadius: '12px',
+              border: '1px solid rgba(255,255,255,0.2)',
+            }}
+            overlayInnerStyle={{
+              padding: '10px 16px',
+              background: 'transparent',
+              color: '#fff',
+              textShadow: '0 1px rgba(0,0,0,0.1)',
+            }}
+            arrow={{ pointAtCenter: true }}
+          >
+            <span style={{ display: 'inline-block' }}>
+              <Button disabled={actionLoading === 'start'} onClick={() => void handleAction('start')}>
+                启动
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip 
+            open={actionLoading === 'stop' || undefined} 
+            title={actionLoading === 'stop' ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+            color="rgba(255, 255, 255, 0.15)"
+            overlayClassName="glass-tooltip"
+            overlayStyle={{
+              backdropFilter: 'blur(12px)',
+              boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
+              borderRadius: '12px',
+              border: '1px solid rgba(255,255,255,0.2)',
+            }}
+            overlayInnerStyle={{
+              padding: '10px 16px',
+              background: 'transparent',
+              color: '#fff',
+              textShadow: '0 1px rgba(0,0,0,0.1)',
+            }}
+            arrow={{ pointAtCenter: true }}
+          >
+            <span style={{ display: 'inline-block' }}>
+              <Button disabled={actionLoading === 'stop'} onClick={() => void handleAction('stop')}>
+                停止
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip 
+            open={actionLoading === 'restart' || undefined} 
+            title={actionLoading === 'restart' ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+            color="rgba(255, 255, 255, 0.15)"
+            overlayClassName="glass-tooltip"
+            overlayStyle={{
+              backdropFilter: 'blur(12px)',
+              boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
+              borderRadius: '12px',
+              border: '1px solid rgba(255,255,255,0.2)',
+            }}
+            overlayInnerStyle={{
+              padding: '10px 16px',
+              background: 'transparent',
+              color: '#fff',
+              textShadow: '0 1px rgba(0,0,0,0.1)',
+            }}
+            arrow={{ pointAtCenter: true }}
+          >
+            <span style={{ display: 'inline-block' }}>
+              <Button disabled={actionLoading === 'restart'} onClick={() => void handleAction('restart')}>
+                重启
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip 
+            open={actionLoading === 'kill' || undefined} 
+            title={actionLoading === 'kill' ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+            color="rgba(255, 255, 255, 0.15)"
+            overlayClassName="glass-tooltip"
+            overlayStyle={{
+              backdropFilter: 'blur(12px)',
+              boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
+              borderRadius: '12px',
+              border: '1px solid rgba(255,255,255,0.2)',
+            }}
+            overlayInnerStyle={{
+              padding: '10px 16px',
+              background: 'transparent',
+              color: '#fff',
+              textShadow: '0 1px rgba(0,0,0,0.1)',
+            }}
+            arrow={{ pointAtCenter: true }}
+          >
+            <span style={{ display: 'inline-block' }}>
+              <Button danger disabled={actionLoading === 'kill'} onClick={() => void handleAction('kill')}>
+                强制结束
+              </Button>
+            </span>
+          </Tooltip>
         </Space>
       </div>
       <Card className="glass-card table-card">

@@ -1,3 +1,4 @@
+import { LoadingOutlined } from '@ant-design/icons'
 import {
   Alert,
   Badge,
@@ -14,6 +15,7 @@ import {
   Tooltip,
   Typography,
   message,
+  Spin,
 } from 'antd'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -295,49 +297,116 @@ export function ServiceListPageMain() {
             },
             {
               title: '操作',
-              render: (_, record) => (
-                <Space wrap>
-                  <Tooltip title={!isServiceConfigured(record) ? '请先补齐 exe 路径和工作目录' : ''}>
-                    <Button
-                      size="small"
-                      loading={actionLoadingKey === `${record.service.id}-start`}
-                      disabled={!isServiceConfigured(record) || record.runtime.status === 'running'}
-                      onClick={() => void handleAction(record.service.id, 'start')}
+              render: (_, record) => {
+                const isStartLoading = actionLoadingKey === `${record.service.id}-start`
+                const isStopLoading = actionLoadingKey === `${record.service.id}-stop`
+                const isRestartLoading = actionLoadingKey === `${record.service.id}-restart`
+
+                return (
+                  <Space wrap>
+                    <Tooltip 
+                      open={isStartLoading || (!isServiceConfigured(record) ? undefined : false)} 
+                      title={!isServiceConfigured(record) ? '请先补齐 exe 路径和工作目录' : isStartLoading ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+                      color="rgba(255, 255, 255, 0.15)"
+                      overlayClassName="glass-tooltip"
+                      overlayStyle={{
+                        backdropFilter: 'blur(12px)',
+                        boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                      }}
+                      overlayInnerStyle={{
+                        padding: '10px 16px',
+                        background: 'transparent',
+                        color: '#fff',
+                        textShadow: '0 1px rgba(0,0,0,0.1)',
+                      }}
+                      arrow={{ pointAtCenter: true }}
                     >
-                      启动
+                      <span style={{ display: 'inline-block' }}>
+                        <Button
+                          size="small"
+                          disabled={isStartLoading || !isServiceConfigured(record) || record.runtime.status === 'running'}
+                          onClick={() => void handleAction(record.service.id, 'start')}
+                        >
+                          启动
+                        </Button>
+                      </span>
+                    </Tooltip>
+                    <Tooltip 
+                      open={isStopLoading || undefined} 
+                      title={isStopLoading ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+                      color="rgba(255, 255, 255, 0.15)"
+                      overlayClassName="glass-tooltip"
+                      overlayStyle={{
+                        backdropFilter: 'blur(12px)',
+                        boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                      }}
+                      overlayInnerStyle={{
+                        padding: '10px 16px',
+                        background: 'transparent',
+                        color: '#fff',
+                        textShadow: '0 1px rgba(0,0,0,0.1)',
+                      }}
+                      arrow={{ pointAtCenter: true }}
+                    >
+                      <span style={{ display: 'inline-block' }}>
+                        <Button
+                          size="small"
+                          disabled={isStopLoading || (!record.runtime.pid && record.runtime.status !== 'running')}
+                          onClick={() => void handleAction(record.service.id, 'stop')}
+                        >
+                          停止
+                        </Button>
+                      </span>
+                    </Tooltip>
+                    <Tooltip 
+                      open={isRestartLoading || undefined} 
+                      title={isRestartLoading ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} /> : ''}
+                      color="rgba(255, 255, 255, 0.15)"
+                      overlayClassName="glass-tooltip"
+                      overlayStyle={{
+                        backdropFilter: 'blur(12px)',
+                        boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                      }}
+                      overlayInnerStyle={{
+                        padding: '10px 16px',
+                        background: 'transparent',
+                        color: '#fff',
+                        textShadow: '0 1px rgba(0,0,0,0.1)',
+                      }}
+                      arrow={{ pointAtCenter: true }}
+                    >
+                      <span style={{ display: 'inline-block' }}>
+                        <Button
+                          size="small"
+                          disabled={isRestartLoading || !isServiceConfigured(record)}
+                          onClick={() => void handleAction(record.service.id, 'restart')}
+                        >
+                          重启
+                        </Button>
+                      </span>
+                    </Tooltip>
+                    <Button size="small" onClick={() => openEditDrawer(record)}>
+                      编辑
                     </Button>
-                  </Tooltip>
-                  <Button
-                    size="small"
-                    loading={actionLoadingKey === `${record.service.id}-stop`}
-                    disabled={!record.runtime.pid && record.runtime.status !== 'running'}
-                    onClick={() => void handleAction(record.service.id, 'stop')}
-                  >
-                    停止
-                  </Button>
-                  <Button
-                    size="small"
-                    loading={actionLoadingKey === `${record.service.id}-restart`}
-                    disabled={!isServiceConfigured(record)}
-                    onClick={() => void handleAction(record.service.id, 'restart')}
-                  >
-                    重启
-                  </Button>
-                  <Button size="small" onClick={() => openEditDrawer(record)}>
-                    编辑
-                  </Button>
-                  {!record.service.isBuiltin ? (
-                    <Popconfirm
-                      title="确认删除这个服务吗？"
-                      onConfirm={() => void handleDelete(record.service.id)}
-                    >
-                      <Button size="small" danger>
-                        删除
-                      </Button>
-                    </Popconfirm>
-                  ) : null}
-                </Space>
-              ),
+                    {!record.service.isBuiltin ? (
+                      <Popconfirm
+                        title="确认删除这个服务吗？"
+                        onConfirm={() => void handleDelete(record.service.id)}
+                      >
+                        <Button size="small" danger>
+                          删除
+                        </Button>
+                      </Popconfirm>
+                    ) : null}
+                  </Space>
+                )
+              },
             },
           ]}
           expandable={{
