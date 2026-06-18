@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "DevTools Launcher desktop app"
 authors = ["Trae"]
 license = "MIT"
-repository = ""
+repository = "https://github.com/itmoenyu/DevTools-Launcher"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -32,3 +32,7 @@ uuid = { version = "1.18", features = ["serde", "v4"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
+
+[target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"

@@ -28,6 +28,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
@@ -38,6 +39,17 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJFOTk2MjdDNUZBRDU5MkUKUldRdVdhMWZmR0tadmpad1d4aFZuNEMwSU0rYW4zT25GbUxDL09RZE5YSmo4WmEyNmd6NTNoRUsK",
+      "endpoints": [
+        "https://github.com/itmoenyu/DevTools-Launcher/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

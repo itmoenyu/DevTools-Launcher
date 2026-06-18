@@ -75,6 +75,7 @@ pub fn run() {
     info!("应用状态初始化完成");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             // 第二次启动时不要再创建新主窗口，而是直接唤醒现有窗口。
             info!("检测到重复启动请求，准备唤醒已存在的主窗口");
@@ -106,6 +107,10 @@ pub fn run() {
         ])
         .setup(|app| {
             info!("Tauri setup 开始");
+
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+
             tray::tray_manager::setup_tray(&app.handle())?;
             info!("系统托盘初始化完成");
 

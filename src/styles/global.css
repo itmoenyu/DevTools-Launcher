@@ -119,6 +119,25 @@ body {
   z-index: 1;
 }
 
+.update-toolbar {
+  margin-bottom: 0;
+}
+
+.update-release-notes-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.update-release-notes {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--colorBgContainer) 35%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  white-space: pre-wrap;
+}
+
 .status-chip {
   display: inline-flex;
   align-items: center;

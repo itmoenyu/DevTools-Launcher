@@ -1,13 +1,87 @@
-import { Alert, Button, Card, Form, InputNumber, Space, Switch, Typography, message } from 'antd'
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  InputNumber,
+  Progress,
+  Space,
+  Switch,
+  Typography,
+  message,
+} from 'antd'
 
+import useDesktopUpdaterController from '@/hooks/useDesktopUpdaterController'
 import { updateAppSettings } from '@/services/tauri-api/client'
 import { useServiceStore } from '@/store/service-store'
+import { formatDateTime } from '@/utils/formatters'
 
 export function GeneralSettingsPageMain() {
   const settings = useServiceStore((state) => state.settings)
   const setSettings = useServiceStore((state) => state.setSettings)
   const [messageApi, contextHolder] = message.useMessage()
   const [form] = Form.useForm()
+  const {
+    stage,
+    currentVersion,
+    latestVersion,
+    releaseNotes,
+    errorMessage,
+    downloadProgress,
+    lastCheckedAt,
+    isChecking,
+    isInstalling,
+    canInstall,
+    checkForUpdates,
+    installUpdateAndRestart,
+  } = useDesktopUpdaterController()
+
+  const updateStatusMessageMap = {
+    idle: {
+      type: 'info' as const,
+      message: '更新说明',
+      description:
+        '点击“检查更新”后，应用会从配置好的更新服务器拉取最新版本信息；如果发现新版本，会在这里展示版本号、更新说明，并提供一键下载安装重启入口。',
+    },
+    checking: {
+      type: 'info' as const,
+      message: '正在检查更新',
+      description: '正在连接更新服务器并比对当前版本，请稍候。',
+    },
+    latest: {
+      type: 'success' as const,
+      message: '当前已是最新版',
+      description: `当前版本 v${currentVersion} 已是最新版本。`,
+    },
+    available: {
+      type: 'warning' as const,
+      message: `发现新版本 v${latestVersion ?? '--'}`,
+      description: `当前版本 v${currentVersion}，可以直接下载安装并自动重启到新版本。`,
+    },
+    downloading: {
+      type: 'info' as const,
+      message: '正在下载更新包',
+      description: '更新包下载完成后会自动进入安装阶段，请不要关闭应用。',
+    },
+    installing: {
+      type: 'info' as const,
+      message: '正在安装更新',
+      description: '安装程序已经接管更新流程，请等待安装完成。',
+    },
+    relaunching: {
+      type: 'success' as const,
+      message: '更新安装完成',
+      description: '应用正在重启并切换到新版本。',
+    },
+    error: {
+      type: 'error' as const,
+      message: '检查更新失败',
+      description: errorMessage ?? '更新流程执行失败，请检查更新配置或稍后重试。',
+    },
+  } as const
+
+  const updateStatusPresentation = updateStatusMessageMap[stage]
 
   async function handleSave() {
     const values = await form.validateFields()
@@ -80,6 +154,71 @@ export function GeneralSettingsPageMain() {
             <InputNumber min={1} max={365} style={{ width: '100%' }} />
           </Form.Item>
         </Form>
+      </Card>
+      <Card className="glass-card form-card">
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <div className="page-toolbar update-toolbar">
+            <div>
+              <Typography.Title level={4} style={{ margin: 0 }}>
+                检查更新
+              </Typography.Title>
+              <Typography.Text type="secondary">
+                手动从更新服务器检查新版本，发现新版本后支持一键下载安装并自动重启。
+              </Typography.Text>
+            </div>
+            <Space wrap>
+              <Button loading={isChecking} disabled={isInstalling} onClick={() => void checkForUpdates()}>
+                检查更新
+              </Button>
+              <Button
+                type="primary"
+                loading={isInstalling}
+                disabled={!canInstall}
+                onClick={() => void installUpdateAndRestart()}
+              >
+                一键下载安装并重启
+              </Button>
+            </Space>
+          </div>
+
+          <Alert
+            showIcon
+            type={updateStatusPresentation.type}
+            message={updateStatusPresentation.message}
+            description={updateStatusPresentation.description}
+          />
+
+          <Descriptions bordered column={1} size="small">
+            <Descriptions.Item label="当前版本">{`v${currentVersion}`}</Descriptions.Item>
+            <Descriptions.Item label="最新版本">
+              {latestVersion ? `v${latestVersion}` : '尚未获取'}
+            </Descriptions.Item>
+            <Descriptions.Item label="最近检查时间">
+              {lastCheckedAt ? formatDateTime(lastCheckedAt) : '--'}
+            </Descriptions.Item>
+          </Descriptions>
+
+          {typeof downloadProgress === 'number' ? (
+            <div>
+              <Typography.Text type="secondary">下载进度</Typography.Text>
+              <Progress percent={downloadProgress} status="active" style={{ marginTop: 8 }} />
+            </div>
+          ) : null}
+
+          <div className="update-release-notes-block">
+            <Typography.Text strong>更新说明</Typography.Text>
+            <Typography.Paragraph className="update-release-notes">
+              {releaseNotes || '检查到新版本后，这里会展示更新服务器返回的更新说明。'}
+            </Typography.Paragraph>
+          </div>
+
+          <Alert
+            showIcon
+            type="info"
+            message="生产环境接入说明"
+            description="这个入口已经接好了桌面端更新能力，但真正发版前还需要完成两步配置：一是在 src-tauri/tauri.conf.json 里填写真实的 updater 公钥和更新地址，二是在发布流程里生成带签名的更新产物。项目根目录新增了 docs/desktop-updater-release-guide.md，里面把需要你手动配置的内容逐步写清楚了。"
+          />
+        </Space>
       </Card>
     </Space>
   )

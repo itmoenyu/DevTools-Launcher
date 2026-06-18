@@ -1,0 +1,68 @@
+name: Release Tauri GitHub Updater
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-windows:
+    name: Build Windows Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify updater endpoint points to GitHub Releases
+        shell: pwsh
+        run: |
+          $config = Get-Content 'src-tauri/tauri.conf.json' -Raw
+          if ($config -notmatch 'https://github.com/itmoenyu/DevTools-Launcher/releases/latest/download/latest.json') {
+            throw 'tauri.conf.json 中的 updater endpoint 不是预期的 GitHub Releases 地址，请先检查配置。'
+          }
+
+      - name: Verify updater pubkey is configured
+        shell: pwsh
+        run: |
+          $config = Get-Content 'src-tauri/tauri.conf.json' -Raw
+          if ($config -match 'PLEASE_REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY') {
+            throw '检测到 updater 公钥仍是占位值，请先替换成真实公钥后再发版。'
+          }
+
+      - name: Build and publish Tauri release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: DevTools Launcher ${{ github.ref_name }}
+          releaseBody: |
+            自动发布的桌面端安装包与更新产物。
+
+            如果你是通过应用内“检查更新”升级，客户端会读取本次 Release 附带的 latest.json。
+          releaseDraft: false
+          prerelease: false
+          args: ''
