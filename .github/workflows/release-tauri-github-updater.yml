@@ -77,7 +77,12 @@ jobs:
             throw 'TAURI_SIGNING_PRIVATE_KEY 看起来像公钥内容。这里必须填写 minisign 私钥文件内容，不能填写 tauri.conf.json 里的 pubkey。'
           }
 
-          if ($env:TAURI_SIGNING_PRIVATE_KEY -notmatch 'minisign encrypted secret key' -and $env:TAURI_SIGNING_PRIVATE_KEY -notmatch 'RWRTY0Iy') {
+          if (
+            $env:TAURI_SIGNING_PRIVATE_KEY -notmatch 'minisign encrypted secret key' -and
+            $env:TAURI_SIGNING_PRIVATE_KEY -notmatch 'rsign encrypted secret key' -and
+            $env:TAURI_SIGNING_PRIVATE_KEY -notmatch 'RWRTY0Iy' -and
+            $env:TAURI_SIGNING_PRIVATE_KEY -notmatch 'dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5'
+          ) {
             throw 'TAURI_SIGNING_PRIVATE_KEY 格式看起来不对。请重新打开本地的 minisign 私钥文件，把完整内容原样复制到 GitHub Secret。'
           }
 
