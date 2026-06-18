@@ -50,6 +50,37 @@ jobs:
             throw '检测到 updater 公钥仍是占位值，请先替换成真实公钥后再发版。'
           }
 
+      - name: Verify signing secrets are configured
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw 'GitHub Actions Secret TAURI_SIGNING_PRIVATE_KEY 未配置，Tauri updater 无法生成签名产物。'
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
+            throw 'GitHub Actions Secret TAURI_SIGNING_PRIVATE_KEY_PASSWORD 未配置，Tauri updater 无法解锁私钥。'
+          }
+
+      - name: Verify signing private key format
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ($env:TAURI_SIGNING_PRIVATE_KEY -match '^\s*[A-Za-z]:\\') {
+            throw 'TAURI_SIGNING_PRIVATE_KEY 不能填写本机文件路径。GitHub Actions 需要的是 minisign 私钥文件的完整文本内容。'
+          }
+
+          if ($env:TAURI_SIGNING_PRIVATE_KEY -match 'minisign public key' -or $env:TAURI_SIGNING_PRIVATE_KEY -match 'PLEASE_REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY') {
+            throw 'TAURI_SIGNING_PRIVATE_KEY 看起来像公钥内容。这里必须填写 minisign 私钥文件内容，不能填写 tauri.conf.json 里的 pubkey。'
+          }
+
+          if ($env:TAURI_SIGNING_PRIVATE_KEY -notmatch 'minisign encrypted secret key' -and $env:TAURI_SIGNING_PRIVATE_KEY -notmatch 'RWRTY0Iy') {
+            throw 'TAURI_SIGNING_PRIVATE_KEY 格式看起来不对。请重新打开本地的 minisign 私钥文件，把完整内容原样复制到 GitHub Secret。'
+          }
+
       - name: Build and publish Tauri release
         uses: tauri-apps/tauri-action@v0
         env:
