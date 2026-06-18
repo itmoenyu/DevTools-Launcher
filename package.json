@@ -1,7 +1,7 @@
 {
   "name": "devtools-launcher",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.4.2",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420",
@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:build:signed": "powershell -ExecutionPolicy Bypass -File ./scripts/build-tauri-signed-local.ps1"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.5",
