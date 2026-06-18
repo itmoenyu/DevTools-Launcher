@@ -40,16 +40,11 @@ pub fn apply_launch_window_behavior(app_handle: &AppHandle) -> AppResult<()> {
 }
 
 pub fn handle_main_window_close(app_handle: &AppHandle) -> AppResult<()> {
-    let settings = read_settings(app_handle)?;
-
-    if settings.close_to_tray {
-        info!("检测到 close_to_tray=true，关闭主窗口时改为隐藏到托盘");
-        hide_main_window(app_handle);
-        return Ok(());
-    }
-
-    info!("检测到 close_to_tray=false，关闭主窗口时进入真正退出流程");
-    request_app_exit(app_handle, "main-window-close");
+    // 桌面端固定为常驻托盘模式：
+    // 点窗口右上角关闭时只隐藏主窗口，不真正结束进程。
+    // 真正退出统一交给托盘菜单里的“退出应用”。
+    info!("主窗口收到关闭请求，改为隐藏到托盘");
+    hide_main_window(app_handle);
     Ok(())
 }
 

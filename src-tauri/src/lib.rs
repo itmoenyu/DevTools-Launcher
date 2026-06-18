@@ -75,6 +75,11 @@ pub fn run() {
     info!("应用状态初始化完成");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // 第二次启动时不要再创建新主窗口，而是直接唤醒现有窗口。
+            info!("检测到重复启动请求，准备唤醒已存在的主窗口");
+            lifecycle::app_lifecycle_manager::show_main_window(app);
+        }))
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::service_command::list_services,

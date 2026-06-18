@@ -54,6 +54,11 @@ pub fn get_settings(db_path: &str) -> AppResult<AppSettings> {
         }
     }
 
+    // 桌面端生命周期已经固定为“关闭隐藏到托盘”。
+    // 这里强制回写运行时结果，避免历史数据库里曾保存过 false 时，
+    // 前端仍误以为可以通过设置关闭这个行为。
+    settings.close_to_tray = true;
+
     Ok(settings)
 }
 
@@ -61,7 +66,8 @@ pub fn save_settings(db_path: &str, settings: &AppSettings) -> AppResult<AppSett
     let connection = open_connection(db_path)?;
     let timestamp = now();
     let entries = [
-        ("close_to_tray", settings.close_to_tray.to_string()),
+        // 关闭按钮最小化到托盘已经是固定产品规则，这里始终保存 true。
+        ("close_to_tray", true.to_string()),
         ("launch_on_startup", settings.launch_on_startup.to_string()),
         ("minimize_on_launch", settings.minimize_on_launch.to_string()),
         ("data_retention_days", settings.data_retention_days.to_string()),
@@ -83,5 +89,8 @@ pub fn save_settings(db_path: &str, settings: &AppSettings) -> AppResult<AppSett
             .into_app_result()?;
     }
 
-    Ok(settings.clone())
+    let mut normalized = settings.clone();
+    normalized.close_to_tray = true;
+
+    Ok(normalized)
 }

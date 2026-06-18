@@ -11,7 +11,13 @@ export function GeneralSettingsPageMain() {
 
   async function handleSave() {
     const values = await form.validateFields()
-    const saved = await updateAppSettings(values)
+    // `closeToTray` 已经变成桌面端固定规则，这里显式写回 true，
+    // 避免旧数据或表单缓存把它误保存成 false。
+    const saved = await updateAppSettings({
+      ...(settings ?? {}),
+      ...values,
+      closeToTray: true,
+    })
     setSettings(saved)
     messageApi.success('通用设置已保存')
   }
@@ -25,7 +31,7 @@ export function GeneralSettingsPageMain() {
             通用设置
           </Typography.Title>
           <Typography.Text type="secondary">
-            配置托盘行为、开机启动、启动后最小化和数据保留天数。
+            配置单实例常驻托盘、开机启动、启动后最小化和数据保留天数。
           </Typography.Text>
         </div>
         <Button type="primary" onClick={() => void handleSave()}>
@@ -38,21 +44,21 @@ export function GeneralSettingsPageMain() {
           type="info"
           style={{ marginBottom: 16 }}
           message="生命周期说明"
-          description="关闭窗口时最小化到托盘：决定点右上角 X 是隐藏到托盘还是执行真正退出。应用启动后自动最小化：决定 Launcher 启动后是否直接隐藏主窗口。开机自动启动 Launcher：当前版本先保存该偏好，暂未接入 Windows 开机自启注册。"
+          description="Launcher 现在固定为单实例桌面程序：重复双击启动时会唤醒已打开的主窗口；点击右上角 X 只会隐藏到托盘；只有托盘菜单里的“退出应用”才会真正结束进程。应用启动后自动最小化：决定 Launcher 启动后是否直接隐藏主窗口。开机自动启动 Launcher：当前版本先保存该偏好，暂未接入 Windows 开机自启注册。"
         />
         <Form
           layout="vertical"
           form={form}
-          initialValues={settings ?? undefined}
-          key={JSON.stringify(settings ?? {})}
+          initialValues={settings ? { ...settings, closeToTray: true } : undefined}
+          key={JSON.stringify(settings ? { ...settings, closeToTray: true } : {})}
         >
           <Form.Item
             name="closeToTray"
             label="关闭窗口时最小化到托盘"
             valuePropName="checked"
-            extra="开启后，点击主窗口右上角关闭按钮只会隐藏到托盘，已托管服务继续保留；关闭后，点击关闭按钮会进入真正退出流程。"
+            extra="该行为已固定启用，点击主窗口右上角关闭按钮时只会隐藏到托盘，避免误关后把整个 Launcher 进程退出。"
           >
-            <Switch />
+            <Switch disabled />
           </Form.Item>
           <Form.Item
             name="launchOnStartup"
