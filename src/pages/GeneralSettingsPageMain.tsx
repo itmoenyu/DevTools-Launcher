@@ -208,16 +208,9 @@ export function GeneralSettingsPageMain() {
           <div className="update-release-notes-block">
             <Typography.Text strong>更新说明</Typography.Text>
             <Typography.Paragraph className="update-release-notes">
-              {releaseNotes || '检查到新版本后，这里会展示更新服务器返回的更新说明。'}
+              {releaseNotes || '暂无更新'}
             </Typography.Paragraph>
           </div>
-
-          <Alert
-            showIcon
-            type="info"
-            message="生产环境接入说明"
-            description="这个入口已经接好了桌面端更新能力，但真正发版前还需要完成两步配置：一是在 src-tauri/tauri.conf.json 里填写真实的 updater 公钥和更新地址，二是在发布流程里生成带签名的更新产物。项目根目录新增了 docs/desktop-updater-release-guide.md，里面把需要你手动配置的内容逐步写清楚了。"
-          />
         </Space>
       </Card>
     </Space>
