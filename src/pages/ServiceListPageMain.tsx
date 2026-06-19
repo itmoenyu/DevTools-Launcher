@@ -20,6 +20,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import ServiceRuntimeStatusIndicator from '@/components/common/ServiceRuntimeStatusIndicator'
+import GlassTooltip from '@/components/common/GlassTooltip'
 import {
   createCustomService,
   deleteService,
@@ -312,11 +313,17 @@ export function ServiceListPageMain() {
                   : isStartLoading
                     ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
                     : ''
+                const startOverlayInnerStyle = actionAvailability.startReasonColor
+                  ? { color: actionAvailability.startReasonColor }
+                  : undefined
                 const stopTooltipTitle = actionAvailability.stopDisabled
                   ? actionAvailability.stopReason
                   : isStopLoading
                     ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
                     : ''
+                const stopOverlayInnerStyle = actionAvailability.stopReasonColor
+                  ? { color: actionAvailability.stopReasonColor }
+                  : undefined
                 const restartTooltipTitle = actionAvailability.restartDisabled
                   ? actionAvailability.restartReason
                   : isRestartLoading
@@ -325,24 +332,7 @@ export function ServiceListPageMain() {
 
                 return (
                   <Space wrap>
-                    <Tooltip 
-                      title={startTooltipTitle}
-                      color="rgba(255, 255, 255, 0.15)"
-                      overlayClassName="glass-tooltip"
-                      overlayStyle={{
-                        backdropFilter: 'blur(12px)',
-                        boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
-                        borderRadius: '12px',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                      }}
-                      overlayInnerStyle={{
-                        padding: '10px 16px',
-                        background: 'transparent',
-                        color: '#fff',
-                        textShadow: '0 1px rgba(0,0,0,0.1)',
-                      }}
-                      arrow={{ pointAtCenter: true }}
-                    >
+                    <GlassTooltip title={startTooltipTitle} overlayInnerStyle={startOverlayInnerStyle}>
                       <span style={{ display: 'inline-block' }}>
                         <Button
                           size="small"
@@ -352,25 +342,8 @@ export function ServiceListPageMain() {
                           启动
                         </Button>
                       </span>
-                    </Tooltip>
-                    <Tooltip 
-                      title={stopTooltipTitle}
-                      color="rgba(255, 255, 255, 0.15)"
-                      overlayClassName="glass-tooltip"
-                      overlayStyle={{
-                        backdropFilter: 'blur(12px)',
-                        boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
-                        borderRadius: '12px',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                      }}
-                      overlayInnerStyle={{
-                        padding: '10px 16px',
-                        background: 'transparent',
-                        color: '#fff',
-                        textShadow: '0 1px rgba(0,0,0,0.1)',
-                      }}
-                      arrow={{ pointAtCenter: true }}
-                    >
+                    </GlassTooltip>
+                    <GlassTooltip title={stopTooltipTitle} overlayInnerStyle={stopOverlayInnerStyle}>
                       <span style={{ display: 'inline-block' }}>
                         <Button
                           size="small"
@@ -380,25 +353,8 @@ export function ServiceListPageMain() {
                           停止
                         </Button>
                       </span>
-                    </Tooltip>
-                    <Tooltip 
-                      title={restartTooltipTitle}
-                      color="rgba(255, 255, 255, 0.15)"
-                      overlayClassName="glass-tooltip"
-                      overlayStyle={{
-                        backdropFilter: 'blur(12px)',
-                        boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
-                        borderRadius: '12px',
-                        border: '1px solid rgba(255,255,255,0.2)',
-                      }}
-                      overlayInnerStyle={{
-                        padding: '10px 16px',
-                        background: 'transparent',
-                        color: '#fff',
-                        textShadow: '0 1px rgba(0,0,0,0.1)',
-                      }}
-                      arrow={{ pointAtCenter: true }}
-                    >
+                    </GlassTooltip>
+                    <GlassTooltip title={restartTooltipTitle}>
                       <span style={{ display: 'inline-block' }}>
                         <Button
                           size="small"
@@ -408,7 +364,7 @@ export function ServiceListPageMain() {
                           重启
                         </Button>
                       </span>
-                    </Tooltip>
+                    </GlassTooltip>
                     <Button size="small" onClick={() => openEditDrawer(record)}>
                       编辑
                     </Button>

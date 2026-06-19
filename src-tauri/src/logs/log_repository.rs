@@ -84,6 +84,22 @@ pub fn clear_logs_by_service(db_path: &str, service_id: &str) -> AppResult<bool>
     Ok(deleted > 0)
 }
 
+/// 删除 `created_at` 早于 `cutoff_rfc3339` 的日志。
+///
+/// `created_at` 列以 RFC3339（UTC）字符串写入，RFC3339 的字典序与时间顺序一致，
+/// 因此直接用字符串比较即可，无需把每一行都解析成时间类型。
+/// 返回被删除的行数，供调用方记录。
+pub fn delete_logs_before(db_path: &str, cutoff_rfc3339: &str) -> AppResult<usize> {
+    let connection = open_connection(db_path)?;
+    let deleted = connection
+        .execute(
+            "DELETE FROM logs WHERE created_at < ?1",
+            params![cutoff_rfc3339],
+        )
+        .into_app_result()?;
+    Ok(deleted)
+}
+
 fn map_log_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<LogEntry> {
     Ok(LogEntry {
         id: row.get("id")?,

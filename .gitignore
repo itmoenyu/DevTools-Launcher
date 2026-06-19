@@ -27,6 +27,14 @@ dist-ssr
 
 test/*
 
+# 运行时生成的数据库文件，由 Rust 启动代码在用户设备上创建，不应被签入仓库
+*.db
+
+# 构建产物（本地 dev 构建时可能留存在项目根）
+*.exe
+*.msi
+*.msix
+
 .trae
 
 Tauri 签名私钥密码.txt

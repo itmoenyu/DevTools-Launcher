@@ -1,8 +1,9 @@
 import { LoadingOutlined } from '@ant-design/icons'
-import { Button, Card, Descriptions, Empty, Space, Spin, Tag, Typography, message, Input, Tooltip } from 'antd'
+import { Button, Card, Descriptions, Empty, Space, Spin, Tag, Typography, message, Input } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import GlassTooltip from '@/components/common/GlassTooltip'
 import ServiceRuntimeStatusIndicator from '@/components/common/ServiceRuntimeStatusIndicator'
 import {
   forceKillService,
@@ -241,7 +242,7 @@ export function ServiceDetailPageMain() {
           <Button loading={actionLoading === 'refresh'} onClick={() => void refreshDetail(serviceId)}>
             刷新
           </Button>
-          <Tooltip 
+          <GlassTooltip
             title={
               actionAvailability.startDisabled
                 ? actionAvailability.startReason
@@ -249,21 +250,11 @@ export function ServiceDetailPageMain() {
                   ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
                   : ''
             }
-            color="rgba(255, 255, 255, 0.15)"
-            overlayClassName="glass-tooltip"
-            overlayStyle={{
-              backdropFilter: 'blur(12px)',
-              boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
-              borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.2)',
-            }}
-            overlayInnerStyle={{
-              padding: '10px 16px',
-              background: 'transparent',
-              color: '#fff',
-              textShadow: '0 1px rgba(0,0,0,0.1)',
-            }}
-            arrow={{ pointAtCenter: true }}
+            overlayInnerStyle={
+              actionAvailability.startReasonColor
+                ? { color: actionAvailability.startReasonColor }
+                : undefined
+            }
           >
             <span style={{ display: 'inline-block' }}>
               <Button
@@ -273,8 +264,8 @@ export function ServiceDetailPageMain() {
                 启动
               </Button>
             </span>
-          </Tooltip>
-          <Tooltip 
+          </GlassTooltip>
+          <GlassTooltip
             title={
               actionAvailability.stopDisabled
                 ? actionAvailability.stopReason
@@ -282,21 +273,11 @@ export function ServiceDetailPageMain() {
                   ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
                   : ''
             }
-            color="rgba(255, 255, 255, 0.15)"
-            overlayClassName="glass-tooltip"
-            overlayStyle={{
-              backdropFilter: 'blur(12px)',
-              boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
-              borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.2)',
-            }}
-            overlayInnerStyle={{
-              padding: '10px 16px',
-              background: 'transparent',
-              color: '#fff',
-              textShadow: '0 1px rgba(0,0,0,0.1)',
-            }}
-            arrow={{ pointAtCenter: true }}
+            overlayInnerStyle={
+              actionAvailability.stopReasonColor
+                ? { color: actionAvailability.stopReasonColor }
+                : undefined
+            }
           >
             <span style={{ display: 'inline-block' }}>
               <Button
@@ -306,8 +287,8 @@ export function ServiceDetailPageMain() {
                 停止
               </Button>
             </span>
-          </Tooltip>
-          <Tooltip 
+          </GlassTooltip>
+          <GlassTooltip
             title={
               actionAvailability.restartDisabled
                 ? actionAvailability.restartReason
@@ -315,21 +296,6 @@ export function ServiceDetailPageMain() {
                   ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
                   : ''
             }
-            color="rgba(255, 255, 255, 0.15)"
-            overlayClassName="glass-tooltip"
-            overlayStyle={{
-              backdropFilter: 'blur(12px)',
-              boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
-              borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.2)',
-            }}
-            overlayInnerStyle={{
-              padding: '10px 16px',
-              background: 'transparent',
-              color: '#fff',
-              textShadow: '0 1px rgba(0,0,0,0.1)',
-            }}
-            arrow={{ pointAtCenter: true }}
           >
             <span style={{ display: 'inline-block' }}>
               <Button
@@ -339,8 +305,8 @@ export function ServiceDetailPageMain() {
                 重启
               </Button>
             </span>
-          </Tooltip>
-          <Tooltip 
+          </GlassTooltip>
+          <GlassTooltip
             title={
               actionAvailability.killDisabled
                 ? actionAvailability.killReason
@@ -348,21 +314,6 @@ export function ServiceDetailPageMain() {
                   ? <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} />
                   : ''
             }
-            color="rgba(255, 255, 255, 0.15)"
-            overlayClassName="glass-tooltip"
-            overlayStyle={{
-              backdropFilter: 'blur(12px)',
-              boxShadow: 'inset 0 0 5px 2px rgba(255,255,255,0.3), inset 0 5px 2px rgba(255,255,255,0.2), 0 6px 16px 0 rgba(0,0,0,0.08)',
-              borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.2)',
-            }}
-            overlayInnerStyle={{
-              padding: '10px 16px',
-              background: 'transparent',
-              color: '#fff',
-              textShadow: '0 1px rgba(0,0,0,0.1)',
-            }}
-            arrow={{ pointAtCenter: true }}
           >
             <span style={{ display: 'inline-block' }}>
               <Button
@@ -373,7 +324,7 @@ export function ServiceDetailPageMain() {
                 强制结束
               </Button>
             </span>
-          </Tooltip>
+          </GlassTooltip>
         </Space>
       </div>
       <Card className="glass-card table-card">

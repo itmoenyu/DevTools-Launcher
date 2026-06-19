@@ -691,7 +691,38 @@ pub fn stop_service(app_handle: &AppHandle, service_id: &str, force: bool) -> Ap
 
 pub fn restart_service(app_handle: &AppHandle, service_id: &str) -> AppResult<ServiceRuntime> {
     info!("正在重启服务: {}", service_id);
-    let _ = stop_service(app_handle, service_id, false);
+
+    // 重启 = 先停再启。旧实现直接 `let _ = stop_service(...)` 吞掉了停止结果，
+    // 一旦旧进程没停掉（仍在占用端口），紧接着 start 必然因端口冲突失败，
+    // 还会把原本还在跑的旧实例状态搅乱。这里改为：只有当旧进程“确实已不存在”
+    // 时才允许继续启动；进程仍在则把停止失败如实上报，避免把用户带进更糟的状态。
+    if let Err(stop_error) = stop_service(app_handle, service_id, false) {
+        let state = app_handle.state::<AppState>();
+        let previous_pid = get_runtime(&state.db_path, service_id)
+            .map(|runtime| runtime.pid)
+            .ok()
+            .flatten();
+
+        let still_running = match previous_pid {
+            Some(pid) => process_exists(pid).unwrap_or(true),
+            None => false,
+        };
+
+        if still_running {
+            return Err(format!(
+                "重启失败：旧实例未能停止（{}），已中止启动以避免端口冲突",
+                stop_error
+            ));
+        }
+
+        // 进程已经不在了（可能崩溃后残留运行态，或停止过程中自行退出），
+        // 此时端口已释放，继续启动符合“重启”的意图。
+        info!(
+            "重启时旧实例停止报错但进程已不存在，继续启动：{}",
+            stop_error
+        );
+    }
+
     let runtime = start_service(app_handle, service_id)?;
     let state = app_handle.state::<AppState>();
     let service = get_service(&state.db_path, service_id)?;

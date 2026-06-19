@@ -62,12 +62,12 @@ export function GeneralSettingsPageMain() {
     downloading: {
       type: 'info' as const,
       message: '正在下载更新包',
-      description: '更新包下载完成后会自动进入安装阶段，请不要关闭应用。',
+      description: '下载完成自动安装，请不要关闭应用。',
     },
     installing: {
       type: 'info' as const,
       message: '正在安装更新',
-      description: '安装程序已经接管更新流程，请等待安装完成。',
+      description: '安装程序下载完成，请等待安装完成。',
     },
     relaunching: {
       type: 'success' as const,
@@ -77,7 +77,7 @@ export function GeneralSettingsPageMain() {
     error: {
       type: 'error' as const,
       message: '检查更新失败',
-      description: errorMessage ?? '更新流程执行失败，请检查更新配置或稍后重试。',
+      description: errorMessage ?? '请稍后重试。',
     },
   } as const
 
@@ -176,7 +176,7 @@ export function GeneralSettingsPageMain() {
                 disabled={!canInstall}
                 onClick={() => void installUpdateAndRestart()}
               >
-                一键下载安装并重启
+                立即更新
               </Button>
             </Space>
           </div>

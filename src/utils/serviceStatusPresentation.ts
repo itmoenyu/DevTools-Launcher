@@ -41,8 +41,10 @@ export interface ServiceInstanceSourceExplanation {
 export interface ServiceActionAvailability {
   startDisabled: boolean
   startReason: string
+  startReasonColor?: string
   stopDisabled: boolean
   stopReason: string
+  stopReasonColor?: string
   restartDisabled: boolean
   restartReason: string
   killDisabled: boolean
@@ -421,12 +423,14 @@ export function getServiceActionAvailability(
 
   let startDisabled = false
   let startReason = ''
+  let startReasonColor: string | undefined
   if (!configured) {
     startDisabled = true
     startReason = '请先补齐可执行文件路径和工作目录。'
   } else if (presentation.code === 'running') {
     startDisabled = true
     startReason = '这项服务已经在运行中，不需要重复启动。'
+    startReasonColor = '#000'
   } else if (presentation.code === 'starting') {
     startDisabled = true
     startReason = '当前已经在启动流程中，请等状态稳定后再操作。'
@@ -440,6 +444,7 @@ export function getServiceActionAvailability(
 
   let stopDisabled = false
   let stopReason = ''
+  let stopReasonColor: string | undefined
   if (presentation.code === 'stopping') {
     stopDisabled = true
     stopReason = '当前已经在停止流程中，请稍候。'
@@ -449,6 +454,7 @@ export function getServiceActionAvailability(
       presentation.code === 'port_conflict'
         ? `当前识别结果是“${sourceExplanation.label}”，不是 Launcher 记录到的托管 PID，面板不能直接用“停止”安全接管它。`
         : '当前没有 Launcher 记录到的托管 PID，普通停止无法定位目标进程。'
+    stopReasonColor = '#000'
   }
 
   let restartDisabled = false
@@ -480,8 +486,10 @@ export function getServiceActionAvailability(
   return {
     startDisabled,
     startReason,
+    startReasonColor,
     stopDisabled,
     stopReason,
+    stopReasonColor,
     restartDisabled,
     restartReason,
     killDisabled,

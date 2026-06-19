@@ -34,6 +34,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Run TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Run ESLint
+        run: npm run lint
+
       - name: Verify updater endpoint points to GitHub Releases
         shell: pwsh
         run: |

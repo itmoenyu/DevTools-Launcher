@@ -61,3 +61,18 @@ pub fn list_history(db_path: &str) -> AppResult<Vec<OperationHistoryItem>> {
         .into_app_result()?;
     Ok(rows)
 }
+
+/// 删除 `created_at` 早于 `cutoff_rfc3339` 的操作历史。
+///
+/// 与日志清理同理，`created_at` 是 RFC3339 字符串，可直接用字典序比较。
+/// 返回被删除的行数。
+pub fn delete_history_before(db_path: &str, cutoff_rfc3339: &str) -> AppResult<usize> {
+    let connection = open_connection(db_path)?;
+    let deleted = connection
+        .execute(
+            "DELETE FROM operation_history WHERE created_at < ?1",
+            params![cutoff_rfc3339],
+        )
+        .into_app_result()?;
+    Ok(deleted)
+}
