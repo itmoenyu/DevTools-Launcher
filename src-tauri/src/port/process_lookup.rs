@@ -1,5 +1,12 @@
 use std::process::Command;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+/// Windows `CREATE_NO_WINDOW` 标志，阻止 spawn 子进程时闪现控制台窗口。
+/// 发行版用户双击桌面快捷方式运行应用，不应看到 netstat / taskkill 等后台命令的终端闪烁。
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 use crate::core::{
     error::{AppResult, IntoAppResult},
     types::PortInspectionItem,
@@ -8,6 +15,7 @@ use crate::core::{
 pub fn inspect_port(port: u16) -> AppResult<PortInspectionItem> {
     let output = Command::new("netstat")
         .args(["-ano", "-p", "tcp"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .into_app_result()?;
     let content = String::from_utf8_lossy(&output.stdout);
@@ -90,6 +98,7 @@ pub fn lookup_process_name(pid: u32) -> AppResult<String> {
     let filter = format!("PID eq {}", pid);
     let output = Command::new("tasklist")
         .args(["/FI", &filter, "/FO", "CSV", "/NH"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .into_app_result()?;
     let content = String::from_utf8_lossy(&output.stdout);
@@ -126,6 +135,7 @@ pub fn lookup_process_path(pid: u32) -> AppResult<String> {
     );
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command", &command])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .into_app_result()?;
 
@@ -151,6 +161,7 @@ pub fn process_matches_path(pid: u32, expected_path: &str) -> AppResult<bool> {
 
 pub fn kill_process(pid: u32, force: bool) -> AppResult<bool> {
     let mut command = Command::new("taskkill");
+    command.creation_flags(CREATE_NO_WINDOW);
     command.args(["/PID", &pid.to_string(), "/T"]);
 
     if force {

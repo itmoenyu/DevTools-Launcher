@@ -74,13 +74,21 @@ pub fn run() {
     let app_state = initialize_app_state().expect("failed to initialize app state");
     info!("应用状态初始化完成");
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            // 第二次启动时不要再创建新主窗口，而是直接唤醒现有窗口。
-            info!("检测到重复启动请求，准备唤醒已存在的主窗口");
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_process::init());
+
+    // 单实例锁基于 app identifier 创建系统级互斥体,dev 与 release 共用同一
+    // identifier 会导致两个环境的进程互相"接管"。开发环境频繁重启无需单实例保护,
+    // 仅在 release 构建时启用,避免 dev 进程抢走用户桌面快捷方式的窗口焦点。
+    #[cfg(not(debug_assertions))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(
+        |app, _argv, _cwd| {
+            info!("检测到重复启动请求, 准备唤醒已存在的主窗口");
             lifecycle::app_lifecycle_manager::show_main_window(app);
-        }))
+        },
+    ));
+
+    builder
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::service_command::list_services,

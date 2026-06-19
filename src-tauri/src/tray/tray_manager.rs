@@ -56,7 +56,11 @@ pub fn setup_tray(app_handle: &AppHandle) -> AppResult<()> {
 
     TrayIconBuilder::new()
         .icon(icon)
-        .tooltip("DevTools Launcher - 开发工具启动器")
+        .tooltip(if cfg!(debug_assertions) {
+            "DevTools Launcher - 开发工具启动器（开发）"
+        } else {
+            "DevTools Launcher - 开发工具启动器"
+        })
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
