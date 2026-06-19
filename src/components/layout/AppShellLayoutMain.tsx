@@ -10,11 +10,24 @@ import {
 } from '@ant-design/icons'
 import { Layout, Menu, Typography, Space } from 'antd'
 import { Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer } from 'react'
 import type { ReactNode } from 'react'
 import { LogoIcon } from '../common/LogoIcon'
 
 const { Header, Sider, Content } = Layout
+
+type NavAction = 'PUSH' | 'POP' | 'REPLACE'
+
+function historyDepthReducer(state: number, action: NavAction) {
+  switch (action) {
+    case 'PUSH':
+      return state + 1
+    case 'POP':
+      return Math.max(0, state - 1)
+    default:
+      return state
+  }
+}
 
 function MenuLabel({ icon, text }: { icon: ReactNode; text: string }) {
   return (
@@ -39,14 +52,10 @@ export function AppShellLayoutMain() {
   const location = useLocation()
   const navigate = useNavigate()
   const navType = useNavigationType()
-  const [historyDepth, setHistoryDepth] = useState(0)
+  const [historyDepth, dispatch] = useReducer(historyDepthReducer, 0)
 
   useEffect(() => {
-    if (navType === 'PUSH') {
-      setHistoryDepth((prev) => prev + 1)
-    } else if (navType === 'POP') {
-      setHistoryDepth((prev) => Math.max(0, prev - 1))
-    }
+    dispatch(navType)
   }, [location.key, navType])
 
   return (
