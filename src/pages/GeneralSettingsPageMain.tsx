@@ -10,7 +10,7 @@ import {
   Typography,
   message,
 } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { UpdateAvailableModal } from '@/components/update/UpdateAvailableModal'
 import useDesktopUpdaterController from '@/hooks/useDesktopUpdaterController'
@@ -23,8 +23,8 @@ export function GeneralSettingsPageMain() {
   const setSettings = useServiceStore((state) => state.setSettings)
   const [messageApi, contextHolder] = message.useMessage()
   const [form] = Form.useForm()
-  const [modalOpen, setModalOpen] = useState(false)
   const autoCheckedRef = useRef(false)
+  const dismissedRef = useRef(false)
 
   const {
     stage,
@@ -53,15 +53,14 @@ export function GeneralSettingsPageMain() {
     checkForUpdates()
   }, [settings, checkForUpdates])
 
-  // 发现新版本时弹出玻璃风格 Modal
+  // stage 重新变为 available 时重置 dismiss 标记（比如用户重新点"检查更新"）
   useEffect(() => {
-    if (stage === 'available') {
-      setModalOpen(true)
-    }
     if (stage !== 'available') {
-      setModalOpen(false)
+      dismissedRef.current = false
     }
   }, [stage])
+
+  const modalOpen = stage === 'available' && !dismissedRef.current
 
   // 非 idle 阶段变化时，用 Toast 展示状态
   useEffect(() => {
@@ -96,7 +95,6 @@ export function GeneralSettingsPageMain() {
 
   async function handleManualCheck() {
     autoCheckedRef.current = true
-    setModalOpen(false)
     checkForUpdates()
   }
 
@@ -222,7 +220,7 @@ export function GeneralSettingsPageMain() {
         isInstalling={isInstalling}
         canInstall={canInstall}
         onInstall={() => installUpdateAndRestart()}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => { dismissedRef.current = true }}
       />
     </Space>
   )
