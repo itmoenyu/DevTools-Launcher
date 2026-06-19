@@ -10,7 +10,7 @@ import {
   Typography,
   message,
 } from 'antd'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { UpdateAvailableModal } from '@/components/update/UpdateAvailableModal'
 import useDesktopUpdaterController from '@/hooks/useDesktopUpdaterController'
@@ -24,7 +24,7 @@ export function GeneralSettingsPageMain() {
   const [messageApi, contextHolder] = message.useMessage()
   const [form] = Form.useForm()
   const autoCheckedRef = useRef(false)
-  const dismissedRef = useRef(false)
+  const [dismissed, setDismissed] = useState(false)
 
   const {
     stage,
@@ -53,14 +53,7 @@ export function GeneralSettingsPageMain() {
     checkForUpdates()
   }, [settings, checkForUpdates])
 
-  // stage 重新变为 available 时重置 dismiss 标记（比如用户重新点"检查更新"）
-  useEffect(() => {
-    if (stage !== 'available') {
-      dismissedRef.current = false
-    }
-  }, [stage])
-
-  const modalOpen = stage === 'available' && !dismissedRef.current
+  const modalOpen = stage === 'available' && !dismissed
 
   // 非 idle 阶段变化时，用 Toast 展示状态
   useEffect(() => {
@@ -94,6 +87,7 @@ export function GeneralSettingsPageMain() {
   }
 
   async function handleManualCheck() {
+    setDismissed(false)
     autoCheckedRef.current = true
     checkForUpdates()
   }
@@ -220,7 +214,7 @@ export function GeneralSettingsPageMain() {
         isInstalling={isInstalling}
         canInstall={canInstall}
         onInstall={() => installUpdateAndRestart()}
-        onCancel={() => { dismissedRef.current = true }}
+        onCancel={() => { setDismissed(true) }}
       />
     </Space>
   )
