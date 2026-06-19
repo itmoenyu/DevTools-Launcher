@@ -19,6 +19,7 @@ fn default_settings() -> AppSettings {
         minimize_on_launch: false,
         data_retention_days: 14,
         preferred_theme: "dark".to_string(),
+        auto_update_enabled: false,
     }
 }
 
@@ -50,6 +51,7 @@ pub fn get_settings(db_path: &str) -> AppResult<AppSettings> {
                 settings.data_retention_days = value.parse::<i64>().unwrap_or(14)
             }
             "preferred_theme" => settings.preferred_theme = value,
+            "auto_update_enabled" => settings.auto_update_enabled = value == "true",
             _ => {}
         }
     }
@@ -72,6 +74,7 @@ pub fn save_settings(db_path: &str, settings: &AppSettings) -> AppResult<AppSett
         ("minimize_on_launch", settings.minimize_on_launch.to_string()),
         ("data_retention_days", settings.data_retention_days.to_string()),
         ("preferred_theme", settings.preferred_theme.clone()),
+        ("auto_update_enabled", settings.auto_update_enabled.to_string()),
     ];
 
     for (key, value) in entries {

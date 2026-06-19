@@ -4,6 +4,7 @@ export interface AppSettings {
   minimizeOnLaunch: boolean
   dataRetentionDays: number
   preferredTheme: 'dark' | 'light'
+  autoUpdateEnabled: boolean
 }
 
 export interface DashboardSummary {

@@ -117,4 +117,5 @@ pub struct AppSettings {
     pub minimize_on_launch: bool,
     pub data_retention_days: i64,
     pub preferred_theme: String,
+    pub auto_update_enabled: bool,
 }

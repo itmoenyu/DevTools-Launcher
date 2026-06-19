@@ -117,6 +117,10 @@ function translateUpdaterError(error: unknown) {
     return '连接更新服务器超时，请检查当前网络、代理设置或更新服务响应是否过慢。'
   }
 
+  if (normalizedMessage.includes('error sending request')) {
+    return '无法访问更新服务器。请检查网络连接，或确认 GitHub Releases 是否已发布并上传了更新清单。'
+  }
+
   if (
     normalizedMessage.includes('dns')
     || normalizedMessage.includes('network')

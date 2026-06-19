@@ -1,5 +1,4 @@
 import {
-  Alert,
   Button,
   Card,
   Descriptions,
@@ -11,7 +10,9 @@ import {
   Typography,
   message,
 } from 'antd'
+import { useEffect, useRef, useState } from 'react'
 
+import { UpdateAvailableModal } from '@/components/update/UpdateAvailableModal'
 import useDesktopUpdaterController from '@/hooks/useDesktopUpdaterController'
 import { updateAppSettings } from '@/services/tauri-api/client'
 import { useServiceStore } from '@/store/service-store'
@@ -22,6 +23,9 @@ export function GeneralSettingsPageMain() {
   const setSettings = useServiceStore((state) => state.setSettings)
   const [messageApi, contextHolder] = message.useMessage()
   const [form] = Form.useForm()
+  const [modalOpen, setModalOpen] = useState(false)
+  const autoCheckedRef = useRef(false)
+
   const {
     stage,
     currentVersion,
@@ -37,56 +41,50 @@ export function GeneralSettingsPageMain() {
     installUpdateAndRestart,
   } = useDesktopUpdaterController()
 
-  const updateStatusMessageMap = {
-    idle: {
-      type: 'info' as const,
-      message: '更新说明',
-      description:
-        '点击“检查更新”后，应用会从配置好的更新服务器拉取最新版本信息；如果发现新版本，会在这里展示版本号、更新说明，并提供一键下载安装重启入口。',
-    },
-    checking: {
-      type: 'info' as const,
-      message: '正在检查更新',
-      description: '正在连接更新服务器并比对当前版本，请稍候。',
-    },
-    latest: {
-      type: 'success' as const,
-      message: '当前已是最新版',
-      description: `当前版本 v${currentVersion} 已是最新版本。`,
-    },
-    available: {
-      type: 'warning' as const,
-      message: `发现新版本 v${latestVersion ?? '--'}`,
-      description: `当前版本 v${currentVersion}，可以直接下载安装并自动重启到新版本。`,
-    },
-    downloading: {
-      type: 'info' as const,
-      message: '正在下载更新包',
-      description: '下载完成自动安装，请不要关闭应用。',
-    },
-    installing: {
-      type: 'info' as const,
-      message: '正在安装更新',
-      description: '安装程序下载完成，请等待安装完成。',
-    },
-    relaunching: {
-      type: 'success' as const,
-      message: '更新安装完成',
-      description: '应用正在重启并切换到新版本。',
-    },
-    error: {
-      type: 'error' as const,
-      message: '检查更新失败',
-      description: errorMessage ?? '请稍后重试。',
-    },
-  } as const
+  // 在设置页挂载时，如果启用了自动更新，自动检查一次
+  useEffect(() => {
+    if (autoCheckedRef.current) return
+    if (!settings) return
+    if (!settings.autoUpdateEnabled) {
+      autoCheckedRef.current = true
+      return
+    }
+    autoCheckedRef.current = true
+    checkForUpdates()
+  }, [settings, checkForUpdates])
 
-  const updateStatusPresentation = updateStatusMessageMap[stage]
+  // 发现新版本时弹出玻璃风格 Modal
+  useEffect(() => {
+    if (stage === 'available') {
+      setModalOpen(true)
+    }
+    if (stage !== 'available') {
+      setModalOpen(false)
+    }
+  }, [stage])
+
+  // 非 idle 阶段变化时，用 Toast 展示状态
+  useEffect(() => {
+    if (stage === 'idle') return
+
+    const toastMap: Record<string, { type: 'success' | 'info' | 'warning' | 'error'; text: string }> = {
+      checking: { type: 'info', text: '正在检查更新...' },
+      latest: { type: 'success', text: `当前已是最新版 v${currentVersion}` },
+      available: { type: 'warning', text: `发现新版本 v${latestVersion ?? '--'}` },
+      downloading: { type: 'info', text: '正在下载更新包...' },
+      installing: { type: 'info', text: '正在安装更新...' },
+      relaunching: { type: 'success', text: '更新安装完成，正在重启...' },
+      error: { type: 'error', text: errorMessage ?? '检查更新失败，请稍后重试。' },
+    }
+
+    const toastConfig = toastMap[stage]
+    if (toastConfig) {
+      messageApi[toastConfig.type](toastConfig.text)
+    }
+  }, [stage, currentVersion, latestVersion, errorMessage, messageApi])
 
   async function handleSave() {
     const values = await form.validateFields()
-    // `closeToTray` 已经变成桌面端固定规则，这里显式写回 true，
-    // 避免旧数据或表单缓存把它误保存成 false。
     const saved = await updateAppSettings({
       ...(settings ?? {}),
       ...values,
@@ -94,6 +92,12 @@ export function GeneralSettingsPageMain() {
     })
     setSettings(saved)
     messageApi.success('通用设置已保存')
+  }
+
+  async function handleManualCheck() {
+    autoCheckedRef.current = true
+    setModalOpen(false)
+    checkForUpdates()
   }
 
   return (
@@ -105,7 +109,7 @@ export function GeneralSettingsPageMain() {
             通用设置
           </Typography.Title>
           <Typography.Text type="secondary">
-            配置单实例常驻托盘、开机启动、启动后最小化和数据保留天数。
+            配置常驻托盘、开机启动、启动后最小化、自动更新和数据保留天数。
           </Typography.Text>
         </div>
         <Button type="primary" onClick={() => void handleSave()}>
@@ -113,13 +117,6 @@ export function GeneralSettingsPageMain() {
         </Button>
       </div>
       <Card className="glass-card form-card">
-        <Alert
-          showIcon
-          type="info"
-          style={{ marginBottom: 16 }}
-          message="生命周期说明"
-          description="Launcher 现在固定为单实例桌面程序：重复双击启动时会唤醒已打开的主窗口；点击右上角 X 只会隐藏到托盘；只有托盘菜单里的“退出应用”才会真正结束进程。应用启动后自动最小化：决定 Launcher 启动后是否直接隐藏主窗口。开机自动启动 Launcher：当前版本先保存该偏好，暂未接入 Windows 开机自启注册。"
-        />
         <Form
           layout="vertical"
           form={form}
@@ -150,6 +147,14 @@ export function GeneralSettingsPageMain() {
           >
             <Switch />
           </Form.Item>
+          <Form.Item
+            name="autoUpdateEnabled"
+            label="启用自动更新"
+            valuePropName="checked"
+            extra="开启后，打开此设置页面时将自动检查新版本。发现新版本时弹出更新提示，可选择立即更新或稍后再说。"
+          >
+            <Switch />
+          </Form.Item>
           <Form.Item name="dataRetentionDays" label="日志和历史保留天数">
             <InputNumber min={1} max={365} style={{ width: '100%' }} />
           </Form.Item>
@@ -167,7 +172,7 @@ export function GeneralSettingsPageMain() {
               </Typography.Text>
             </div>
             <Space wrap>
-              <Button loading={isChecking} disabled={isInstalling} onClick={() => void checkForUpdates()}>
+              <Button loading={isChecking} disabled={isInstalling} onClick={() => void handleManualCheck()}>
                 检查更新
               </Button>
               <Button
@@ -180,13 +185,6 @@ export function GeneralSettingsPageMain() {
               </Button>
             </Space>
           </div>
-
-          <Alert
-            showIcon
-            type={updateStatusPresentation.type}
-            message={updateStatusPresentation.message}
-            description={updateStatusPresentation.description}
-          />
 
           <Descriptions bordered column={1} size="small">
             <Descriptions.Item label="当前版本">{`v${currentVersion}`}</Descriptions.Item>
@@ -213,6 +211,19 @@ export function GeneralSettingsPageMain() {
           </div>
         </Space>
       </Card>
+
+      <UpdateAvailableModal
+        open={modalOpen}
+        stage={stage}
+        currentVersion={currentVersion}
+        latestVersion={latestVersion}
+        releaseNotes={releaseNotes}
+        downloadProgress={downloadProgress}
+        isInstalling={isInstalling}
+        canInstall={canInstall}
+        onInstall={() => installUpdateAndRestart()}
+        onCancel={() => setModalOpen(false)}
+      />
     </Space>
   )
 }
