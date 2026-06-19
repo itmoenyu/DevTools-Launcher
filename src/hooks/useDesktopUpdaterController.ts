@@ -33,9 +33,55 @@ const initialState: DesktopUpdaterState = {
   lastCheckedAt: null,
 }
 
+const GITHUB_RELEASE_API_URL =
+  'https://api.github.com/repos/itmoenyu/DevTools-Launcher/releases/latest'
+
+interface GithubLatestReleasePayload {
+  tag_name?: string
+  body?: string
+  published_at?: string
+}
+
 function normalizeReleaseNotes(value?: string) {
   const trimmed = value?.trim()
   return trimmed || '更新服务器没有提供更新说明。'
+}
+
+function normalizeReleaseVersion(tagName?: string) {
+  return tagName?.trim().replace(/^v/i, '') || null
+}
+
+function resolveReleaseNotes(update: Update, release?: GithubLatestReleasePayload | null) {
+  const rawNotes = update.rawJson?.notes
+  const rawBody = update.rawJson?.body
+  const normalized =
+    update.body
+    || (typeof rawNotes === 'string' ? rawNotes : undefined)
+    || (typeof rawBody === 'string' ? rawBody : undefined)
+    || release?.body
+
+  return normalizeReleaseNotes(normalized)
+}
+
+async function fetchLatestReleaseMetadata() {
+  try {
+    const response = await fetch(GITHUB_RELEASE_API_URL, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/vnd.github+json',
+      },
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    const payload = (await response.json()) as GithubLatestReleasePayload
+    return payload
+  } catch {
+    return null
+  }
 }
 
 function translateUpdaterError(error: unknown) {
@@ -137,7 +183,10 @@ export function useDesktopUpdaterController() {
     await clearHeldUpdate()
 
     try {
-      const pendingUpdate = await check({ timeout: 15000 })
+      const [pendingUpdate, latestRelease] = await Promise.all([
+        check({ timeout: 15000 }),
+        fetchLatestReleaseMetadata(),
+      ])
       const checkedAt = new Date().toISOString()
 
       if (!pendingUpdate) {
@@ -145,11 +194,11 @@ export function useDesktopUpdaterController() {
           ...previous,
           stage: 'latest',
           currentVersion,
-          latestVersion: currentVersion,
-          releaseNotes: '',
+          latestVersion: normalizeReleaseVersion(latestRelease?.tag_name) || currentVersion,
+          releaseNotes: normalizeReleaseNotes(latestRelease?.body),
           errorMessage: null,
           downloadProgress: null,
-          lastCheckedAt: checkedAt,
+          lastCheckedAt: latestRelease?.published_at || checkedAt,
         }))
         return
       }
@@ -160,11 +209,11 @@ export function useDesktopUpdaterController() {
         ...previous,
         stage: 'available',
         currentVersion: pendingUpdate.currentVersion || currentVersion,
-        latestVersion: pendingUpdate.version,
-        releaseNotes: normalizeReleaseNotes(pendingUpdate.body),
+        latestVersion: normalizeReleaseVersion(latestRelease?.tag_name) || pendingUpdate.version,
+        releaseNotes: resolveReleaseNotes(pendingUpdate, latestRelease),
         errorMessage: null,
         downloadProgress: null,
-        lastCheckedAt: checkedAt,
+        lastCheckedAt: latestRelease?.published_at || checkedAt,
       }))
     } catch (error) {
       setState((previous) => ({

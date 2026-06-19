@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -92,6 +94,63 @@ jobs:
             throw 'TAURI_SIGNING_PRIVATE_KEY 格式看起来不对。请重新打开本地的 minisign 私钥文件，把完整内容原样复制到 GitHub Secret。'
           }
 
+      - name: Collect release notes from commits
+        id: collect_release_notes
+        shell: pwsh
+        env:
+          CURRENT_TAG: ${{ github.ref_name }}
+        run: |
+          $currentTag = $env:CURRENT_TAG
+          $previousTag = git tag --sort=-version:refname | Where-Object { $_ -ne $currentTag } | Select-Object -First 1
+
+          if ($previousTag) {
+            $commitLines = git log "$previousTag..HEAD" --pretty=format:'%s|%h'
+          } else {
+            $commitLines = git log -10 --pretty=format:'%s|%h'
+          }
+
+          $releaseNoteLines = @()
+          foreach ($line in $commitLines) {
+            if ([string]::IsNullOrWhiteSpace($line)) {
+              continue
+            }
+
+            $parts = $line -split '\|', 2
+            $subject = $parts[0].Trim()
+            $shortSha = if ($parts.Length -gt 1) { $parts[1].Trim() } else { '' }
+
+            if ([string]::IsNullOrWhiteSpace($subject) -or $subject -match '^release:\s*v') {
+              continue
+            }
+
+            if ([string]::IsNullOrWhiteSpace($shortSha)) {
+              $releaseNoteLines += "- $subject"
+            } else {
+              $releaseNoteLines += "- $subject ($shortSha)"
+            }
+          }
+
+          if ($releaseNoteLines.Count -eq 0) {
+            $releaseNoteLines = @('- 本次版本主要包含稳定性优化与问题修复。')
+          }
+
+          $bodyLines = @(
+            "## 更新说明"
+            ""
+          )
+
+          if (-not [string]::IsNullOrWhiteSpace($previousTag)) {
+            $bodyLines += "变更范围：$previousTag -> $currentTag"
+            $bodyLines += ""
+          }
+
+          $bodyLines += $releaseNoteLines
+          $releaseBody = ($bodyLines -join "`n").Trim()
+
+          "body<<EOF" >> $env:GITHUB_OUTPUT
+          $releaseBody >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
+
       - name: Build and publish Tauri release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -101,10 +160,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: DevTools Launcher ${{ github.ref_name }}
-          releaseBody: |
-            自动发布的桌面端安装包与更新产物。
-
-            如果你是通过应用内“检查更新”升级，客户端会读取本次 Release 附带的 latest.json。
+          releaseBody: ${{ steps.collect_release_notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           args: ''
