@@ -9,6 +9,8 @@ export type DesktopUpdaterStage =
   | 'latest'
   | 'available'
   | 'downloading'
+  // 后台静默下载已完成，等待用户确认后重启安装
+  | 'downloaded'
   | 'installing'
   | 'relaunching'
   | 'error'
@@ -148,6 +150,9 @@ function translateUpdaterError(error: unknown) {
 export function useDesktopUpdaterController() {
   const [state, setState] = useState<DesktopUpdaterState>(initialState)
   const updateRef = useRef<Update | null>(null)
+  // 下载进度累计用的总量/已下载字节，供 downloadUpdate 与 installUpdateAndRestart 共用。
+  const totalBytesRef = useRef<number | undefined>(undefined)
+  const downloadedBytesRef = useRef<number>(0)
 
   const clearHeldUpdate = useCallback(async () => {
     if (!updateRef.current) {
@@ -233,6 +238,128 @@ export function useDesktopUpdaterController() {
     }
   }, [clearHeldUpdate, readCurrentVersion])
 
+  // 把下载进度事件转成 setState，downloading/installing 两个流程共用。
+  // 注意：tauri-plugin-updater 的终态事件名是 'Finished'（不是 'Done'）。
+  const buildDownloadProgressHandler = useCallback(
+    (onFinished: () => void) => (event: DownloadEvent) => {
+      if (event.event === 'Started') {
+        totalBytesRef.current = event.data.contentLength
+        downloadedBytesRef.current = 0
+        setState((previous) => ({
+          ...previous,
+          stage: 'downloading',
+          downloadProgress: 0,
+        }))
+        return
+      }
+
+      if (event.event === 'Progress') {
+        downloadedBytesRef.current += event.data.chunkLength
+        const total = totalBytesRef.current
+        const progress =
+          total && total > 0
+            ? Math.min(Math.round((downloadedBytesRef.current / total) * 100), 100)
+            : null
+
+        setState((previous) => ({
+          ...previous,
+          stage: 'downloading',
+          downloadProgress: progress,
+        }))
+        return
+      }
+
+      // event.event === 'Finished'
+      onFinished()
+    },
+    [],
+  )
+
+  // 仅下载更新包到本地，不安装、不重启。用于后台静默下载，
+  // 下载完成后进入 'downloaded' 状态，等待用户通过 restartToUpdate 确认重启。
+  const downloadUpdate = useCallback(async () => {
+    const pendingUpdate = updateRef.current
+
+    if (!pendingUpdate) {
+      setState((previous) => ({
+        ...previous,
+        stage: 'error',
+        errorMessage: '没有可下载的更新，请先点击“检查更新”获取最新版本信息。',
+      }))
+      return
+    }
+
+    try {
+      setState((previous) => ({
+        ...previous,
+        stage: 'downloading',
+        errorMessage: null,
+        downloadProgress: 0,
+      }))
+
+      await pendingUpdate.download(
+        buildDownloadProgressHandler(() => {
+          setState((previous) => ({
+            ...previous,
+            stage: 'downloaded',
+            downloadProgress: 100,
+          }))
+        }),
+        { timeout: 10 * 60 * 1000 },
+      )
+    } catch (error) {
+      await clearHeldUpdate()
+      setState((previous) => ({
+        ...previous,
+        stage: 'error',
+        errorMessage: translateUpdaterError(error),
+        downloadProgress: null,
+      }))
+    }
+  }, [buildDownloadProgressHandler, clearHeldUpdate])
+
+  // 安装已下载的更新包并重启。配合 downloadUpdate 使用：
+  // 后台下载完成 → Toast 提示 → 用户点击重启 → 调本方法。
+  const restartToUpdate = useCallback(async () => {
+    const pendingUpdate = updateRef.current
+
+    if (!pendingUpdate) {
+      setState((previous) => ({
+        ...previous,
+        stage: 'error',
+        errorMessage: '更新未就绪，请重新检查更新。',
+      }))
+      return
+    }
+
+    try {
+      setState((previous) => ({
+        ...previous,
+        stage: 'installing',
+        downloadProgress: 100,
+      }))
+
+      await pendingUpdate.install()
+      await clearHeldUpdate()
+
+      setState((previous) => ({
+        ...previous,
+        stage: 'relaunching',
+        downloadProgress: 100,
+      }))
+
+      await relaunch()
+    } catch (error) {
+      await clearHeldUpdate()
+      setState((previous) => ({
+        ...previous,
+        stage: 'error',
+        errorMessage: translateUpdaterError(error),
+        downloadProgress: null,
+      }))
+    }
+  }, [clearHeldUpdate])
+
   const installUpdateAndRestart = useCallback(async () => {
     const pendingUpdate = updateRef.current
 
@@ -245,9 +372,6 @@ export function useDesktopUpdaterController() {
       return
     }
 
-    let totalBytes: number | undefined
-    let downloadedBytes = 0
-
     try {
       setState((previous) => ({
         ...previous,
@@ -256,39 +380,17 @@ export function useDesktopUpdaterController() {
         downloadProgress: 0,
       }))
 
-      await pendingUpdate.downloadAndInstall((event: DownloadEvent) => {
-        if (event.event === 'Started') {
-          totalBytes = event.data.contentLength
-          downloadedBytes = 0
+      // downloadAndInstall 下载完成后会自动进入安装阶段，Finished 事件触发即开始安装。
+      await pendingUpdate.downloadAndInstall(
+        buildDownloadProgressHandler(() => {
           setState((previous) => ({
             ...previous,
-            stage: 'downloading',
-            downloadProgress: 0,
+            stage: 'installing',
+            downloadProgress: 100,
           }))
-          return
-        }
-
-        if (event.event === 'Progress') {
-          downloadedBytes += event.data.chunkLength
-          const progress =
-            totalBytes && totalBytes > 0
-              ? Math.min(Math.round((downloadedBytes / totalBytes) * 100), 100)
-              : null
-
-          setState((previous) => ({
-            ...previous,
-            stage: 'downloading',
-            downloadProgress: progress,
-          }))
-          return
-        }
-
-        setState((previous) => ({
-          ...previous,
-          stage: 'installing',
-          downloadProgress: 100,
-        }))
-      }, { timeout: 10 * 60 * 1000 })
+        }),
+        { timeout: 10 * 60 * 1000 },
+      )
 
       await clearHeldUpdate()
 
@@ -309,7 +411,7 @@ export function useDesktopUpdaterController() {
         downloadProgress: null,
       }))
     }
-  }, [clearHeldUpdate])
+  }, [buildDownloadProgressHandler, clearHeldUpdate])
 
   useEffect(() => {
     void readCurrentVersion()
@@ -323,12 +425,16 @@ export function useDesktopUpdaterController() {
     ...state,
     checkForUpdates,
     installUpdateAndRestart,
+    downloadUpdate,
+    restartToUpdate,
     isChecking: state.stage === 'checking',
+    isDownloading: state.stage === 'downloading',
     isInstalling:
-      state.stage === 'downloading'
-      || state.stage === 'installing'
+      state.stage === 'installing'
       || state.stage === 'relaunching',
     canInstall: state.stage === 'available',
+    // 已下载完成、等待用户确认重启（用于 Toast“立即重启”按钮可用态）
+    canRestart: state.stage === 'downloaded',
   }
 }
 

@@ -22,9 +22,6 @@ const useStyles = createStyles(({ css, cssVar }) => {
   return {
     glassBorder,
     glassBox,
-    notBackdropFilter: css({
-      backdropFilter: 'none',
-    }),
     app: css({
       textShadow: '0 1px rgba(0,0,0,0.1)',
     }),
@@ -33,8 +30,10 @@ const useStyles = createStyles(({ css, cssVar }) => {
       backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 40%, transparent)`,
     }),
     modalContainer: css({
-      ...glassBox,
-      backdropFilter: 'blur(8px)',
+      [`&.ant-modal-container`]: {
+        ...glassBox,
+        backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 40%, transparent)`,
+      },
     }),
     buttonRoot: css({
       ...glassBorder,
@@ -132,7 +131,7 @@ const useGlassTheme = () => {
         },
       },
       message: {},
-      modal: {
+       modal: {
         classNames: {
           container: styles.modalContainer,
         },
@@ -147,11 +146,11 @@ const useGlassTheme = () => {
         }),
       },
       alert: {
-        className: clsx(styles.glassBox, styles.notBackdropFilter),
+        className: styles.glassBox,
       },
       colorPicker: {
         classNames: {
-          root: clsx(styles.glassBox, styles.notBackdropFilter),
+          root: styles.glassBox,
         },
         arrow: false,
       },
@@ -162,7 +161,7 @@ const useGlassTheme = () => {
       },
       select: {
         classNames: {
-          root: clsx(styles.glassBox, styles.notBackdropFilter),
+          root: styles.glassBox,
           popup: {
             root: styles.glassBox,
           },
@@ -170,7 +169,7 @@ const useGlassTheme = () => {
       },
       datePicker: {
         classNames: {
-          root: clsx(styles.glassBox, styles.notBackdropFilter),
+          root: styles.glassBox,
           popup: {
             container: styles.glassBox,
           },
@@ -178,12 +177,12 @@ const useGlassTheme = () => {
       },
       input: {
         classNames: {
-          root: clsx(styles.glassBox, styles.notBackdropFilter),
+          root: styles.glassBox,
         },
       },
       inputNumber: {
         classNames: {
-          root: clsx(styles.glassBox, styles.notBackdropFilter),
+          root: styles.glassBox,
         },
       },
       popover: {

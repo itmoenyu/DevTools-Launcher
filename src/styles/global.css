@@ -318,9 +318,29 @@ body {
   border-color: rgba(0, 0, 0, 0.06) !important;
 }
 
-.ant-drawer-content,
-.ant-modal-content {
-  background: transparent !important;
+.ant-drawer-content {
+  background: transparent;
+}
+
+.square-checkbox .ant-checkbox-inner {
+  border-radius: 2px !important;
+}
+
+/* CloseConfirmModal: radio 与 checkbox 左对齐 */
+.close-confirm-options {
+  display: inline-block;
+  text-align: left;
+  min-width: 160px;
+}
+
+/* CloseConfirmModal: 按钮区域居中对齐 */
+.close-confirm-actions {
+  display: inline-flex;
+  gap: 12px;
+}
+
+.close-confirm-actions .ant-btn {
+  min-width: 120px;
 }
 
 .app-sider .ant-menu-item {

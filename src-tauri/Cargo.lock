@@ -715,7 +715,7 @@ dependencies = [
 
 [[package]]
 name = "devtools_launcher"
-version = "0.5.1"
+version = "0.6.1"
 dependencies = [
  "chrono",
  "dirs",

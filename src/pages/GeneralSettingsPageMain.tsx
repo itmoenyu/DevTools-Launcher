@@ -10,10 +10,8 @@ import {
   Typography,
   message,
 } from 'antd'
-import { useEffect, useRef, useState } from 'react'
 
-import { UpdateAvailableModal } from '@/components/update/UpdateAvailableModal'
-import useDesktopUpdaterController from '@/hooks/useDesktopUpdaterController'
+import { useUpdater } from '@/app/UpdaterProvider'
 import { updateAppSettings } from '@/services/tauri-api/client'
 import { useServiceStore } from '@/store/service-store'
 import { formatDateTime } from '@/utils/formatters'
@@ -23,16 +21,12 @@ export function GeneralSettingsPageMain() {
   const setSettings = useServiceStore((state) => state.setSettings)
   const [messageApi, contextHolder] = message.useMessage()
   const [form] = Form.useForm()
-  const autoCheckedRef = useRef(false)
-  const lastPersistRef = useRef('')
-  const [dismissed, setDismissed] = useState(false)
 
+  // 消费全局更新状态机（App.tsx 启动检查 + Toast 通知 / 设置页手动检查）
   const {
-    stage,
     currentVersion,
     latestVersion,
     releaseNotes,
-    errorMessage,
     downloadProgress,
     lastCheckedAt,
     isChecking,
@@ -40,56 +34,7 @@ export function GeneralSettingsPageMain() {
     canInstall,
     checkForUpdates,
     installUpdateAndRestart,
-  } = useDesktopUpdaterController()
-
-  // 在设置页挂载时，如果启用了自动更新，自动检查一次
-  useEffect(() => {
-    if (autoCheckedRef.current) return
-    if (!settings) return
-    if (!settings.autoUpdateEnabled) {
-      autoCheckedRef.current = true
-      return
-    }
-    autoCheckedRef.current = true
-    checkForUpdates()
-  }, [settings, checkForUpdates])
-
-  // 检查更新完成后，将更新说明持久化到数据库
-  useEffect(() => {
-    if (!settings) return
-    if (stage !== 'latest' && stage !== 'available') return
-    if (!releaseNotes && !latestVersion) return
-    const key = `${stage}:${latestVersion}:${releaseNotes}`
-    if (key === lastPersistRef.current) return
-    lastPersistRef.current = key
-    updateAppSettings({
-      ...settings,
-      latestReleaseNotes: releaseNotes,
-      latestCheckedVersion: latestVersion ?? '',
-    }).then(setSettings)
-  }, [stage, releaseNotes, latestVersion, settings, setSettings])
-
-  const modalOpen = stage === 'available' && !dismissed
-
-  // 非 idle 阶段变化时，用 Toast 展示状态
-  useEffect(() => {
-    if (stage === 'idle') return
-
-    const toastMap: Record<string, { type: 'success' | 'info' | 'warning' | 'error'; text: string }> = {
-      checking: { type: 'info', text: '正在检查更新...' },
-      latest: { type: 'success', text: `当前已是最新版 v${currentVersion}` },
-      available: { type: 'warning', text: `发现新版本 v${latestVersion ?? '--'}` },
-      downloading: { type: 'info', text: '正在下载更新包...' },
-      installing: { type: 'info', text: '正在安装更新...' },
-      relaunching: { type: 'success', text: '更新安装完成，正在重启...' },
-      error: { type: 'error', text: errorMessage ?? '检查更新失败，请稍后重试。' },
-    }
-
-    const toastConfig = toastMap[stage]
-    if (toastConfig) {
-      messageApi[toastConfig.type](toastConfig.text)
-    }
-  }, [stage, currentVersion, latestVersion, errorMessage, messageApi])
+  } = useUpdater()
 
   async function handleSave() {
     const values = await form.validateFields()
@@ -102,9 +47,10 @@ export function GeneralSettingsPageMain() {
   }
 
   async function handleManualCheck() {
-    setDismissed(false)
-    autoCheckedRef.current = true
-    checkForUpdates()
+    // 手动检查时，让设置页 UI 完全接管：发现新版本后不自动后台下载，
+    // 而是走 installUpdateAndRestart 一条龙（下载 + 安装 + 重启）。
+    messageApi.info('正在检查更新...')
+    await checkForUpdates()
   }
 
   return (
@@ -151,7 +97,7 @@ export function GeneralSettingsPageMain() {
             name="autoUpdateEnabled"
             label="启用自动更新"
             valuePropName="checked"
-            extra="开启后，打开此设置页面时将自动检查新版本。发现新版本时弹出更新提示，可选择立即更新或稍后再说。"
+            extra="开启后，应用启动时会自动在后台检查新版本，发现更新会静默下载，下载完成后通过右下角提示您重启安装。"
           >
             <Switch />
           </Form.Item>
@@ -211,19 +157,6 @@ export function GeneralSettingsPageMain() {
           </div>
         </Space>
       </Card>
-
-      <UpdateAvailableModal
-        open={modalOpen}
-        stage={stage}
-        currentVersion={currentVersion}
-        latestVersion={latestVersion}
-        releaseNotes={releaseNotes}
-        downloadProgress={downloadProgress}
-        isInstalling={isInstalling}
-        canInstall={canInstall}
-        onInstall={() => installUpdateAndRestart()}
-        onCancel={() => { setDismissed(true) }}
-      />
     </Space>
   )
 }

@@ -19,7 +19,10 @@ fn default_settings() -> AppSettings {
         minimize_on_launch: false,
         data_retention_days: 14,
         preferred_theme: "dark".to_string(),
-        auto_update_enabled: false,
+        // 开发者工具类应用（VSCode/Docker Desktop）普遍默认开启自动更新，
+        // 让用户开箱即用即保持最新。仅影响首次初始化（表空）的新安装用户，
+        // 已有用户因 ensure_default_settings 只在表空时写，不会被覆盖。
+        auto_update_enabled: true,
         latest_release_notes: String::new(),
         latest_checked_version: String::new(),
         close_action: "minimize".to_string(),
@@ -28,8 +31,19 @@ fn default_settings() -> AppSettings {
 }
 
 pub fn ensure_default_settings(db_path: &str) -> AppResult<()> {
-    let settings = default_settings();
-    save_settings(db_path, &settings)?;
+    let connection = open_connection(db_path)?;
+
+    // 只在 app_settings 表为空（首次初始化）时写入默认值，避免每次启动都把
+    // 用户已修改的设置（如 auto_update_enabled）覆盖回默认值。
+    let existing: i64 = connection
+        .query_row("SELECT COUNT(*) FROM app_settings", [], |row| row.get(0))
+        .into_app_result()?;
+
+    if existing == 0 {
+        let settings = default_settings();
+        save_settings(db_path, &settings)?;
+    }
+
     Ok(())
 }
 
