@@ -33,6 +33,7 @@ pub mod lifecycle {
 }
 
 pub mod port {
+    pub mod ip_helper;
     pub mod port_detector;
     pub mod process_lookup;
 }

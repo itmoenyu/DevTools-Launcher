@@ -178,6 +178,31 @@ pub fn kill_process(pid: u32, force: bool) -> AppResult<bool> {
     Ok(output.status.success())
 }
 
+/// 进程信息（名称 + 路径）
+#[derive(Debug, Clone)]
+pub struct ProcessInfo {
+    pub name: String,
+    pub path: String,
+}
+
+/// 批量查多个 PID 的进程名和路径
+///
+/// 单个 PID 查失败不阻塞其他 PID，返回值中只有成功的 PID。
+pub fn lookup_process_infos(
+    pids: &std::collections::HashSet<u32>,
+) -> AppResult<std::collections::HashMap<u32, ProcessInfo>> {
+    let mut cache = std::collections::HashMap::new();
+    for &pid in pids {
+        let name = lookup_process_name(pid).unwrap_or_default();
+        // 只在能找到 name 的情况下才记录（说明进程存在）
+        if !name.is_empty() {
+            let path = lookup_process_path(pid).unwrap_or_default();
+            cache.insert(pid, ProcessInfo { name, path });
+        }
+    }
+    Ok(cache)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{extract_port, find_listening_pid_by_port};
