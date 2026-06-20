@@ -18,16 +18,17 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
   const settings = useServiceStore((state) => state.settings)
   const setSettings = useServiceStore((state) => state.setSettings)
 
-  // 镜像最新的 updater 对象给 effect 使用。这样 effect 依赖 ref（稳定引用），
-  // 满足 react-hooks/exhaustive-deps 规则的同时避免因父 re-render 触发重复持久化。
+  // 镜像最新的 updater 对象给 effect 使用，避免 hook 返回值整体作为依赖触发
+  // 重复持久化。不能在 render 阶段直接赋值 ref.current（React 反模式，会让
+  // 其他 effect / consumer 读到未提交的快照），所以统一在 commit 后的 effect
+  // 里同步；第一次同步通过 ref 的初始值兜底（拿到的就是初始 updater 引用）。
   const updaterRef = useRef(updater)
-  updaterRef.current = updater
-
-  // 把检查更新结果（latestReleaseNotes / latestCheckedVersion）持久化到数据库。
-  // 这段逻辑原来在设置页，搬到全局后无论用户在哪个页面都能正确记录最近一次检查结果。
   const lastPersistKeyRef = useRef('')
 
   useEffect(() => {
+    // 把最新 updater 提交到 ref，effect 内部读取时永远拿到的是上一次 commit 的快照
+    updaterRef.current = updater
+
     const current = updaterRef.current
     const { stage, latestVersion, releaseNotes } = current
     if (!settings) return
@@ -45,7 +46,7 @@ export function UpdaterProvider({ children }: { children: ReactNode }) {
     }).then(setSettings)
     // 仅依赖 settings：updater 字段通过 ref 读取，避免 hook 返回对象引用变化
     // 触发 effect 重复执行。setSettings 是 zustand action，引用稳定。
-  }, [settings, setSettings])
+  }, [settings, setSettings, updater])
 
   return <UpdaterContext.Provider value={updater}>{children}</UpdaterContext.Provider>
 }
