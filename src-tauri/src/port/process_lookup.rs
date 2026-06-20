@@ -9,7 +9,7 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 use crate::core::{
     error::{AppResult, IntoAppResult},
-    types::PortInspectionItem,
+    types::{PortInspectionItem, PortProtocol, TcpState},
 };
 
 pub fn inspect_port(port: u16) -> AppResult<PortInspectionItem> {
@@ -20,12 +20,15 @@ pub fn inspect_port(port: u16) -> AppResult<PortInspectionItem> {
         .into_app_result()?;
     let content = String::from_utf8_lossy(&output.stdout);
 
-    // 把“从 netstat 输出里找到监听指定端口的 PID”这一纯逻辑单独抽出来，
+    // 把"从 netstat 输出里找到监听指定端口的 PID"这一纯逻辑单独抽出来，
     // 既能被单元测试覆盖，也避免原先用 `line.contains(":637")` 判断端口时，
     // 把 6379、63700 等端口误判成 637 的 bug。
     let Some(pid) = find_listening_pid_by_port(&content, port) else {
         return Ok(PortInspectionItem {
             port,
+            state: TcpState::Unknown,
+            protocol: PortProtocol::Tcp,
+            local_address: String::new(),
             occupied: false,
             pid: None,
             process_name: None,
@@ -38,6 +41,9 @@ pub fn inspect_port(port: u16) -> AppResult<PortInspectionItem> {
 
     Ok(PortInspectionItem {
         port,
+        state: TcpState::Listening,
+        protocol: PortProtocol::Tcp,
+        local_address: String::new(),
         occupied: true,
         pid: Some(pid),
         process_name,
