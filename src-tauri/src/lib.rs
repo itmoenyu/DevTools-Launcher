@@ -47,6 +47,10 @@ pub mod service {
     pub mod service_registry;
 }
 
+pub mod services {
+    pub mod browser;
+}
+
 pub mod startup {
     pub mod bootstrap;
 }
@@ -76,7 +80,8 @@ pub fn run() {
     info!("应用状态初始化完成");
 
     let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_process::init());
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init());
 
     // 单实例锁基于 app identifier 创建系统级互斥体,dev 与 release 共用同一
     // identifier 会导致两个环境的进程互相"接管"。开发环境频繁重启无需单实例保护,
@@ -104,6 +109,8 @@ pub fn run() {
             commands::service_command::get_service_runtime,
             commands::port_command::inspect_ports,
             commands::port_command::kill_process_by_pid,
+            commands::port_command::list_listening_ports_cmd,
+            commands::port_command::open_in_browser_cmd,
             commands::log_command::query_logs,
             commands::log_command::clear_logs_by_service,
             commands::launch_group_command::list_launch_groups,
