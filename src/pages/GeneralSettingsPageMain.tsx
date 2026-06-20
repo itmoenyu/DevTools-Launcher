@@ -24,6 +24,7 @@ export function GeneralSettingsPageMain() {
   const [messageApi, contextHolder] = message.useMessage()
   const [form] = Form.useForm()
   const autoCheckedRef = useRef(false)
+  const lastPersistRef = useRef('')
   const [dismissed, setDismissed] = useState(false)
 
   const {
@@ -53,6 +54,21 @@ export function GeneralSettingsPageMain() {
     checkForUpdates()
   }, [settings, checkForUpdates])
 
+  // 检查更新完成后，将更新说明持久化到数据库
+  useEffect(() => {
+    if (!settings) return
+    if (stage !== 'latest' && stage !== 'available') return
+    if (!releaseNotes && !latestVersion) return
+    const key = `${stage}:${latestVersion}:${releaseNotes}`
+    if (key === lastPersistRef.current) return
+    lastPersistRef.current = key
+    updateAppSettings({
+      ...settings,
+      latestReleaseNotes: releaseNotes,
+      latestCheckedVersion: latestVersion ?? '',
+    }).then(setSettings)
+  }, [stage, releaseNotes, latestVersion, settings, setSettings])
+
   const modalOpen = stage === 'available' && !dismissed
 
   // 非 idle 阶段变化时，用 Toast 展示状态
@@ -80,7 +96,6 @@ export function GeneralSettingsPageMain() {
     const saved = await updateAppSettings({
       ...(settings ?? {}),
       ...values,
-      closeToTray: true,
     })
     setSettings(saved)
     messageApi.success('通用设置已保存')
@@ -112,17 +127,10 @@ export function GeneralSettingsPageMain() {
         <Form
           layout="vertical"
           form={form}
-          initialValues={settings ? { ...settings, closeToTray: true } : undefined}
-          key={JSON.stringify(settings ? { ...settings, closeToTray: true } : {})}
+          initialValues={settings ?? undefined}
+          key={JSON.stringify(settings ?? {})}
         >
-          <Form.Item
-            name="closeToTray"
-            label="关闭窗口时最小化到托盘"
-            valuePropName="checked"
-            extra="该行为已固定启用，点击主窗口右上角关闭按钮时只会隐藏到托盘，避免误关后把整个 Launcher 进程退出。"
-          >
-            <Switch disabled />
-          </Form.Item>
+
           <Form.Item
             name="launchOnStartup"
             label="开机自动启动 Launcher"
@@ -198,7 +206,7 @@ export function GeneralSettingsPageMain() {
           <div className="update-release-notes-block">
             <Typography.Text strong>更新说明</Typography.Text>
             <Typography.Paragraph className="update-release-notes">
-              {releaseNotes || '暂无更新'}
+              {releaseNotes || settings?.latestReleaseNotes || '暂无更新'}
             </Typography.Paragraph>
           </div>
         </Space>

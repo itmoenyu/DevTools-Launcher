@@ -1,6 +1,6 @@
 [package]
 name = "devtools_launcher"
-version = "0.5.0"
+version = "0.6.0"
 description = "DevTools Launcher desktop app"
 authors = ["Trae"]
 license = "MIT"

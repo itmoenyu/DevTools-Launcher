@@ -20,6 +20,10 @@ fn default_settings() -> AppSettings {
         data_retention_days: 14,
         preferred_theme: "dark".to_string(),
         auto_update_enabled: false,
+        latest_release_notes: String::new(),
+        latest_checked_version: String::new(),
+        close_action: "minimize".to_string(),
+        close_reminder_disabled: false,
     }
 }
 
@@ -52,14 +56,13 @@ pub fn get_settings(db_path: &str) -> AppResult<AppSettings> {
             }
             "preferred_theme" => settings.preferred_theme = value,
             "auto_update_enabled" => settings.auto_update_enabled = value == "true",
+            "latest_release_notes" => settings.latest_release_notes = value,
+            "latest_checked_version" => settings.latest_checked_version = value,
+            "close_action" => settings.close_action = value,
+            "close_reminder_disabled" => settings.close_reminder_disabled = value == "true",
             _ => {}
         }
     }
-
-    // 桌面端生命周期已经固定为“关闭隐藏到托盘”。
-    // 这里强制回写运行时结果，避免历史数据库里曾保存过 false 时，
-    // 前端仍误以为可以通过设置关闭这个行为。
-    settings.close_to_tray = true;
 
     Ok(settings)
 }
@@ -75,6 +78,10 @@ pub fn save_settings(db_path: &str, settings: &AppSettings) -> AppResult<AppSett
         ("data_retention_days", settings.data_retention_days.to_string()),
         ("preferred_theme", settings.preferred_theme.clone()),
         ("auto_update_enabled", settings.auto_update_enabled.to_string()),
+        ("latest_release_notes", settings.latest_release_notes.clone()),
+        ("latest_checked_version", settings.latest_checked_version.clone()),
+        ("close_action", settings.close_action.clone()),
+        ("close_reminder_disabled", settings.close_reminder_disabled.to_string()),
     ];
 
     for (key, value) in entries {
@@ -92,8 +99,5 @@ pub fn save_settings(db_path: &str, settings: &AppSettings) -> AppResult<AppSett
             .into_app_result()?;
     }
 
-    let mut normalized = settings.clone();
-    normalized.close_to_tray = true;
-
-    Ok(normalized)
+    Ok(settings.clone())
 }

@@ -34,7 +34,7 @@ const useStyles = createStyles(({ css, cssVar }) => {
     }),
     modalContainer: css({
       ...glassBox,
-      backdropFilter: 'none',
+      backdropFilter: 'blur(8px)',
     }),
     buttonRoot: css({
       ...glassBorder,
@@ -131,6 +131,7 @@ const useGlassTheme = () => {
           root: styles.cardRoot,
         },
       },
+      message: {},
       modal: {
         classNames: {
           container: styles.modalContainer,

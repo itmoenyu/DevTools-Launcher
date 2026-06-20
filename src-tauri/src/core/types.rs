@@ -118,4 +118,12 @@ pub struct AppSettings {
     pub data_retention_days: i64,
     pub preferred_theme: String,
     pub auto_update_enabled: bool,
+    #[serde(default)]
+    pub latest_release_notes: String,
+    #[serde(default)]
+    pub latest_checked_version: String,
+    #[serde(default)]
+    pub close_action: String,
+    #[serde(default)]
+    pub close_reminder_disabled: bool,
 }

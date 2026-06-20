@@ -1,9 +1,9 @@
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tracing::{info, warn};
 
 use crate::{
     core::{app_state::AppState, error::AppResult, types::AppSettings},
-    db::settings_repository::get_settings,
+    db::settings_repository::{get_settings, save_settings},
     service::service_manager::shutdown_managed_services,
 };
 
@@ -20,7 +20,7 @@ pub fn show_main_window(app_handle: &AppHandle) {
     }
 }
 
-pub fn hide_main_window(app_handle: &AppHandle) {
+fn hide_main_window(app_handle: &AppHandle) {
     if let Some(window) = app_handle.get_webview_window("main") {
         let _ = window.hide();
     }
@@ -29,8 +29,6 @@ pub fn hide_main_window(app_handle: &AppHandle) {
 pub fn apply_launch_window_behavior(app_handle: &AppHandle) -> AppResult<()> {
     let settings = read_settings(app_handle)?;
 
-    // 这里只处理“启动后是否隐藏主窗口”，不改动服务运行态。
-    // 这样关闭窗口、托盘显示、真正退出都能复用同一套托管规则。
     if settings.minimize_on_launch {
         info!("检测到 minimize_on_launch=true，启动后将主窗口隐藏到托盘");
         hide_main_window(app_handle);
@@ -40,11 +38,49 @@ pub fn apply_launch_window_behavior(app_handle: &AppHandle) -> AppResult<()> {
 }
 
 pub fn handle_main_window_close(app_handle: &AppHandle) -> AppResult<()> {
-    // 桌面端固定为常驻托盘模式：
-    // 点窗口右上角关闭时只隐藏主窗口，不真正结束进程。
-    // 真正退出统一交给托盘菜单里的“退出应用”。
-    info!("主窗口收到关闭请求，改为隐藏到托盘");
-    hide_main_window(app_handle);
+    let settings = read_settings(app_handle)?;
+
+    if settings.close_reminder_disabled {
+        match settings.close_action.as_str() {
+            "quit" => {
+                info!("关闭窗口时根据用户偏好直接退出应用");
+                request_app_exit(app_handle, "main-window-close-auto-quit");
+            }
+            _ => {
+                info!("关闭窗口时根据用户偏好最小化到托盘");
+                hide_main_window(app_handle);
+            }
+        }
+        return Ok(());
+    }
+
+    info!("关闭窗口时弹出二次确认弹窗");
+    let _ = app_handle.emit("close-requested", ());
+
+    Ok(())
+}
+
+pub fn persist_and_execute_close_action(
+    app_handle: &AppHandle,
+    action: &str,
+    dont_remind: bool,
+) -> AppResult<()> {
+    let mut settings = read_settings(app_handle)?;
+    settings.close_action = action.to_string();
+    settings.close_reminder_disabled = dont_remind;
+    save_settings(&app_handle.state::<AppState>().db_path, &settings)?;
+
+    match action {
+        "quit" => {
+            info!("用户选择关闭窗口时退出应用");
+            request_app_exit(app_handle, "main-window-close-modal-quit");
+        }
+        _ => {
+            info!("用户选择关闭窗口时最小化到托盘");
+            hide_main_window(app_handle);
+        }
+    }
+
     Ok(())
 }
 
@@ -56,8 +92,6 @@ pub fn request_app_exit(app_handle: &AppHandle, reason: &str) {
 
     info!("应用准备退出，触发来源: {}", reason);
 
-    // 退出前统一走停服逻辑。
-    // 即使个别服务停止失败，也继续退出，让下次启动时的残留校正继续兜底。
     if let Err(error) = shutdown_managed_services(app_handle) {
         warn!("应用退出前自动处理托管服务时出现问题: {}", error);
     }

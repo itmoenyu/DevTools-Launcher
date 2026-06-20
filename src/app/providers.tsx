@@ -8,7 +8,7 @@ export function AppProviders({ children }: PropsWithChildren) {
 
   return (
     <ConfigProvider {...configProps}>
-      <AntApp className={configProps.app?.className}>{children}</AntApp>
+      <AntApp message={{ stack: { threshold: 3 } }} className={configProps.app?.className}>{children}</AntApp>
     </ConfigProvider>
   )
 }

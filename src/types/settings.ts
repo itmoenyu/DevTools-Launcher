@@ -5,6 +5,10 @@ export interface AppSettings {
   dataRetentionDays: number
   preferredTheme: 'dark' | 'light'
   autoUpdateEnabled: boolean
+  latestReleaseNotes: string
+  latestCheckedVersion: string
+  closeAction: 'minimize' | 'quit'
+  closeReminderDisabled: boolean
 }
 
 export interface DashboardSummary {

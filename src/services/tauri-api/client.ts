@@ -102,6 +102,10 @@ export async function updateAppSettings(payload: AppSettings) {
   return invoke<AppSettings>('update_app_settings', { payload })
 }
 
+export async function handleCloseDecision(action: string, dontRemind: boolean) {
+  return invoke<void>('handle_close_decision', { action, dontRemind })
+}
+
 export async function onServiceRuntimeChanged(
   callback: (runtime: ServiceRuntime) => void,
 ) {

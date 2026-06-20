@@ -112,6 +112,7 @@ pub fn run() {
             commands::process_command::query_operation_history,
             commands::settings_command::get_app_settings,
             commands::settings_command::update_app_settings,
+            commands::settings_command::handle_close_decision,
         ])
         .setup(|app| {
             info!("Tauri setup 开始");
