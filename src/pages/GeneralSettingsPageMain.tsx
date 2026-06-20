@@ -11,7 +11,7 @@ import {
   message,
 } from 'antd'
 
-import { useUpdater } from '@/app/UpdaterProvider'
+import { useUpdater } from '@/app/useUpdater'
 import { updateAppSettings } from '@/services/tauri-api/client'
 import { useServiceStore } from '@/store/service-store'
 import { formatDateTime } from '@/utils/formatters'

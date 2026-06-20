@@ -8,7 +8,7 @@ import { useBootstrapData } from '@/hooks/useBootstrapData'
 import { handleCloseDecision } from '@/services/tauri-api/client'
 import { useServiceStore } from '@/store/service-store'
 
-import { useUpdater } from './UpdaterProvider'
+import { useUpdater } from './useUpdater'
 import { appRouter } from './routes'
 
 // notification key 固定，用于去重与替换（同一类提示只保留一个）
