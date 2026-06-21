@@ -1,8 +1,8 @@
 import { renderHook } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
 
-import type { PortInspectionItem } from '../../types/runtime'
-import type { ServiceWithRuntime } from '../../types/service'
+import type { PortInspectionItem } from '@/types/runtime'
+import type { ServiceWithRuntime } from '@/types/service'
 import { usePortFilter } from '../usePortFilter'
 
 const makeItem = (
