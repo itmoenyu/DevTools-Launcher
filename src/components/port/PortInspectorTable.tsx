@@ -1,6 +1,6 @@
 import { Button, Table, Tag, Tooltip, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useState } from 'react'
 
 import { killProcessByPid } from '@/services/tauri-api/client'
 import type { PortInspectionItem, TcpState } from '@/types/runtime'
@@ -47,6 +47,8 @@ export const PortInspectorTable = memo(function PortInspectorTable({ ports, serv
     ),
     [services],
   )
+
+  const [loadingPids, setLoadingPids] = useState<Set<number>>(new Set())
 
   const columns: ColumnsType<PortInspectionItem> = useMemo(() => [
     {
@@ -111,32 +113,40 @@ export const PortInspectorTable = memo(function PortInspectorTable({ ports, serv
     {
       title: '操作',
       width: 160,
-      render: (_, record) => (
-        <div style={{ display: 'flex', gap: 4 }}>
-          <OpenInBrowserButton port={record.port} address={record.localAddress} />
-          {record.pid !== null && (
-            <Button
-              size="small"
-              danger
-              onClick={async () => {
-                try {
-                  await killProcessByPid(record.pid!)
-                  message.success(`已结束 PID ${record.pid}`)
-                  onKill()
-                } catch (err) {
-                  message.error(
-                    `结束失败：${err instanceof Error ? err.message : String(err)}`,
-                  )
-                }
-              }}
-            >
-              结束
-            </Button>
-          )}
-        </div>
-      ),
+      render: (_, record) => {
+        const pid = record.pid
+        const isLoading = pid !== null && loadingPids.has(pid)
+        return (
+          <div style={{ display: 'flex', gap: 4 }}>
+            <OpenInBrowserButton port={record.port} address={record.localAddress} loading={isLoading} />
+            {pid !== null && (
+              <Button
+                size="small"
+                danger
+                loading={isLoading}
+                onClick={async () => {
+                  setLoadingPids((prev) => { const next = new Set(prev); next.add(pid); return next })
+                  try {
+                    await killProcessByPid(pid)
+                    message.success(`已结束 PID ${pid}`)
+                    onKill()
+                  } catch (err) {
+                    message.error(
+                      `结束失败：${err instanceof Error ? err.message : String(err)}`,
+                    )
+                  } finally {
+                    setLoadingPids((prev) => { const next = new Set(prev); next.delete(pid); return next })
+                  }
+                }}
+              >
+                结束
+              </Button>
+            )}
+          </div>
+        )
+      },
     },
-  ], [myPorts, serviceNameByPort, onKill])
+  ], [myPorts, serviceNameByPort, onKill, loadingPids])
 
   return (
     <Table<PortInspectionItem>

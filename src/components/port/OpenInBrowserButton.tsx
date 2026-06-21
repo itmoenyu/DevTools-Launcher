@@ -6,18 +6,20 @@ import { openInBrowser } from '@/services/tauri-api/client'
 interface Props {
   port: number
   address: string
+  loading?: boolean
 }
 
 /**
- * 「🌍 在浏览器中打开」按钮
+ * 「在浏览器中打开」按钮
  * - 0.0.0.0 / 127.0.0.1 / [::] / 空 都视为回环
  * - 后端拼接为 http://localhost:<port> 打开
  */
-export function OpenInBrowserButton({ port, address }: Props) {
+export function OpenInBrowserButton({ port, address, loading }: Props) {
   return (
     <Button
       type="link"
       size="small"
+      loading={loading}
       icon={<GlobalOutlined />}
       onClick={async () => {
         try {
