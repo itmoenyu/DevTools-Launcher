@@ -145,6 +145,7 @@ export const PortInspectorTable = memo(function PortInspectorTable({ ports, serv
       columns={columns}
       size="small"
       pagination={false}
+      virtual
       rowClassName={(record) => {
         const classes: string[] = []
         if (record.diff === 'new') classes.push('port-row-new')
@@ -155,7 +156,7 @@ export const PortInspectorTable = memo(function PortInspectorTable({ ports, serv
         }
         return classes.join(' ')
       }}
-      scroll={{ x: 'max-content' }}
+      scroll={{ y: 620, x: 'max-content' }}
     />
   )
 })
