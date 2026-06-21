@@ -1,9 +1,10 @@
+import { memo } from 'react'
 import { useServiceStore } from '@/store/service-store'
 
 /**
  * 底部状态条：汇总 + 扫描耗时 + 引擎 + 实时/暂停状态
  */
-export function PortInspectorStatusBar() {
+export const PortInspectorStatusBar = memo(function PortInspectorStatusBar() {
   const summary = useServiceStore((s) => s.summary)
   const free = Math.max(0, summary.total - summary.listening - summary.established)
 
@@ -60,4 +61,4 @@ export function PortInspectorStatusBar() {
       </div>
     </div>
   )
-}
+})

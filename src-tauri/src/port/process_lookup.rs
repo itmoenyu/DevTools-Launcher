@@ -179,27 +179,87 @@ pub fn kill_process(pid: u32, force: bool) -> AppResult<bool> {
 }
 
 /// 进程信息（名称 + 路径）
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct ProcessInfo {
     pub name: String,
     pub path: String,
 }
 
+/// PowerShell 单次查询返回的进程结构（CimInstance 序列化格式）
+#[derive(Debug, serde::Deserialize)]
+struct CimProcess {
+    #[serde(rename = "ProcessId")]
+    process_id: u32,
+    #[serde(rename = "Name")]
+    name: Option<String>,
+    #[serde(rename = "ExecutablePath")]
+    executable_path: Option<String>,
+}
+
+/// 单次 PowerShell 调用批量查询所有进程的 name + path
+///
+/// 替代原来的逐 PID 调 tasklist / Get-CimInstance，将 N*2 次进程创建降为 1 次。
+fn query_all_processes_batch() -> AppResult<Vec<CimProcess>> {
+    let command = r#"
+Get-CimInstance Win32_Process -Property ProcessId, Name, ExecutablePath | ConvertTo-Json -Compress
+"#.trim().to_string();
+
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &command])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .into_app_result()?;
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let trimmed = stdout.trim();
+
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // PowerShell 单条结果返回的是对象而非数组，统一成数组解析
+    let deserialized: Vec<CimProcess> = if trimmed.starts_with('[') {
+        serde_json::from_str(trimmed).map_err(|e| format!("解析进程 JSON 数组失败: {}", e))?
+    } else {
+        let single: CimProcess = serde_json::from_str(trimmed).map_err(|e| format!("解析进程 JSON 对象失败: {}", e))?;
+        vec![single]
+    };
+
+    Ok(deserialized)
+}
+
 /// 批量查多个 PID 的进程名和路径
 ///
-/// 单个 PID 查失败不阻塞其他 PID，返回值中只有成功的 PID。
+/// 单次 PowerShell 查询所有进程并过滤，避免逐 PID 拉起进程。
 pub fn lookup_process_infos(
     pids: &std::collections::HashSet<u32>,
 ) -> AppResult<std::collections::HashMap<u32, ProcessInfo>> {
+    if pids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let all_processes = query_all_processes_batch()?;
     let mut cache = std::collections::HashMap::new();
-    for &pid in pids {
-        let name = lookup_process_name(pid).unwrap_or_default();
-        // 只在能找到 name 的情况下才记录（说明进程存在）
-        if !name.is_empty() {
-            let path = lookup_process_path(pid).unwrap_or_default();
-            cache.insert(pid, ProcessInfo { name, path });
+
+    for proc in all_processes {
+        if !pids.contains(&proc.process_id) {
+            continue;
+        }
+        if let Some(name) = proc.name {
+            if name.is_empty() {
+                continue;
+            }
+            cache.insert(proc.process_id, ProcessInfo {
+                name,
+                path: proc.executable_path.unwrap_or_default(),
+            });
         }
     }
+
     Ok(cache)
 }
 

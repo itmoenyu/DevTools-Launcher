@@ -1,5 +1,6 @@
 import { Button, Table, Tag, Tooltip, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import { memo, useMemo } from 'react'
 
 import { killProcessByPid } from '@/services/tauri-api/client'
 import type { PortInspectionItem, TcpState } from '@/types/runtime'
@@ -29,24 +30,31 @@ const STATE_TAG_COLORS: Record<TcpState, string> = {
   UNKNOWN: 'default',
 }
 
-export function PortInspectorTable({ ports, services, onKill }: Props) {
-  const myPorts = new Set(
-    services
-      .map((s) => s.service.port)
-      .filter((p): p is number => typeof p === 'number'),
+export const PortInspectorTable = memo(function PortInspectorTable({ ports, services, onKill }: Props) {
+  const myPorts = useMemo(
+    () => new Set(
+      services
+        .map((s) => s.service.port)
+        .filter((p): p is number => typeof p === 'number'),
+    ),
+    [services],
   )
-  const serviceNameByPort = new Map<number, string>(
-    services
-      .filter((s) => typeof s.service.port === 'number')
-      .map((s) => [s.service.port as number, s.service.name]),
+  const serviceNameByPort = useMemo(
+    () => new Map<number, string>(
+      services
+        .filter((s) => typeof s.service.port === 'number')
+        .map((s) => [s.service.port as number, s.service.name]),
+    ),
+    [services],
   )
 
-  const columns: ColumnsType<PortInspectionItem> = [
+  const columns: ColumnsType<PortInspectionItem> = useMemo(() => [
     {
       title: '端口',
       dataIndex: 'port',
       width: 90,
       sorter: (a, b) => a.port - b.port,
+      defaultSortOrder: 'ascend',
       render: (port: number) => (
         <span
           style={{
@@ -128,7 +136,7 @@ export function PortInspectorTable({ ports, services, onKill }: Props) {
         </div>
       ),
     },
-  ]
+  ], [myPorts, serviceNameByPort, onKill])
 
   return (
     <Table<PortInspectionItem>
@@ -150,4 +158,4 @@ export function PortInspectorTable({ ports, services, onKill }: Props) {
       scroll={{ x: 'max-content' }}
     />
   )
-}
+})

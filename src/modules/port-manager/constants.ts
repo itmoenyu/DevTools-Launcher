@@ -1,4 +1,4 @@
-export const PORT_REFRESH_INTERVAL_MS = 2000
+export const PORT_REFRESH_INTERVAL_MS = 5000
 export const PORT_DIFF_FADE_OUT_MS = 5000
 export const PORT_SCAN_TIMEOUT_MS = 5000
 

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 
 import { useServiceStore } from '@/store/service-store'
 
+import { PORT_REFRESH_INTERVAL_MS } from '@/modules/port-manager/constants'
+
 /**
  * 顶部状态摘要：监听数 / 冲突数 / 上次更新时间
  */
@@ -9,8 +11,9 @@ export function PortInspectorSummary() {
   const summary = useServiceStore((s) => s.summary)
   const [now, setNow] = useState(Date.now())
 
+  // 轮询周期与端口刷新同步，避免 1 秒一次的不必要渲染
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000)
+    const id = setInterval(() => setNow(Date.now()), PORT_REFRESH_INTERVAL_MS)
     return () => clearInterval(id)
   }, [])
 

@@ -2,11 +2,29 @@ import { useCallback, useEffect, useRef } from 'react'
 
 import { useServiceStore } from '@/store/service-store'
 import { listListeningPorts } from '@/services/tauri-api/client'
+import type { PortInspectionItem } from '@/types/runtime'
 
 import { PORT_REFRESH_INTERVAL_MS } from './constants'
 
 /**
- * 端口扫描器：每 2 秒调一次 `listListeningPorts`，结果写进 store。
+ * 浅比较端口列表：仅当有实际变化时才需要更新 store
+ */
+function hasPortsChanged(a: PortInspectionItem[], b: PortInspectionItem[]): boolean {
+  if (a.length !== b.length) return true
+  for (let i = 0; i < a.length; i++) {
+    const pa = a[i]
+    const pb = b[i]
+    if (pa.port !== pb.port) return true
+    if (pa.pid !== pb.pid) return true
+    if (pa.state !== pb.state) return true
+    if (pa.processName !== pb.processName) return true
+    if (pa.localAddress !== pb.localAddress) return true
+  }
+  return false
+}
+
+/**
+ * 端口扫描器：每 5 秒调一次 `listListeningPorts`，结果写进 store。
  *
  * - 启动立即扫一次
  * - `isPaused=true` 停止轮询
@@ -25,6 +43,11 @@ export function usePortInspector() {
     try {
       const result = await listListeningPorts()
       const duration = Math.round(performance.now() - t0)
+
+      // 数据无变化时跳过 store 更新，避免无意义渲染
+      const current = useServiceStore.getState().ports
+      if (!hasPortsChanged(current, result)) return
+
       useServiceStore.getState().replacePorts(result, duration)
     } catch (err) {
       console.error('[port-inspector] scan failed:', err)
