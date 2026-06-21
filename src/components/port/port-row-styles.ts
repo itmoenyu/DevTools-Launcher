@@ -27,4 +27,9 @@ export const PortRowStyles = createGlobalStyle`
     background-color: rgba(255, 77, 79, 0.06) !important;
     box-shadow: inset 3px 0 0 #ff4d4f;
   }
+
+  /* 隐藏端口页外层滚动条（表格使用虚拟滚动，不需要外层滚动） */
+  .page-content:has(.page-container) {
+    overflow: hidden !important;
+  }
 `
