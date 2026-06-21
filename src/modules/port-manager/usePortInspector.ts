@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useServiceStore } from '@/store/service-store'
 import { listListeningPorts } from '@/services/tauri-api/client'
@@ -35,10 +35,12 @@ export function usePortInspector() {
   const isPaused = useServiceStore((s) => s.isPaused)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const inFlightRef = useRef<boolean>(false)
+  const [isScanning, setIsScanning] = useState(false)
 
   const scan = useCallback(async () => {
     if (inFlightRef.current) return // 防止重叠
     inFlightRef.current = true
+    setIsScanning(true)
     const t0 = performance.now()
     try {
       const result = await listListeningPorts()
@@ -46,13 +48,14 @@ export function usePortInspector() {
 
       // 数据无变化时跳过 store 更新，避免无意义渲染
       const current = useServiceStore.getState().ports
-      if (!hasPortsChanged(current, result)) return
+      if (!current || !hasPortsChanged(current, result)) return
 
       useServiceStore.getState().replacePorts(result, duration)
     } catch (err) {
       console.error('[port-inspector] scan failed:', err)
     } finally {
       inFlightRef.current = false
+      setIsScanning(false)
     }
   }, [])
 
@@ -64,6 +67,15 @@ export function usePortInspector() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
+  }, [isPaused, scan])
+
+  // 从暂停恢复时立即扫一次，不用等 interval 周期
+  const prevPausedRef = useRef(isPaused)
+  useEffect(() => {
+    if (prevPausedRef.current && !isPaused) {
+      void scan()
+    }
+    prevPausedRef.current = isPaused
   }, [isPaused, scan])
 
   // mount 时立即扫一次（独立 effect，只跑一次，不随 isPaused 重 run）
@@ -90,5 +102,5 @@ export function usePortInspector() {
     await scan()
   }, [scan])
 
-  return { refreshNow }
+  return { refreshNow, isScanning }
 }

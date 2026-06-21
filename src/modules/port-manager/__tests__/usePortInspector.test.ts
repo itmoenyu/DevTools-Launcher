@@ -92,9 +92,11 @@ describe('usePortInspector', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
+    // 重置之前的调用计数，只验证 refreshNow 触发了一次新扫描
+    vi.mocked(api.listListeningPorts).mockClear()
     await act(async () => {
       await result.current.refreshNow()
     })
-    expect(api.listListeningPorts).toHaveBeenCalledTimes(2)
+    expect(api.listListeningPorts).toHaveBeenCalledTimes(1)
   })
 })
