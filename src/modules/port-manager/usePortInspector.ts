@@ -35,12 +35,12 @@ export function usePortInspector() {
   const isPaused = useServiceStore((s) => s.isPaused)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const inFlightRef = useRef<boolean>(false)
-  const [isScanning, setIsScanning] = useState(false)
+  const [isUserScanning, setIsUserScanning] = useState(false)
 
+  // 后台扫描（自动轮询 / mount / 标签页切回），不触发按钮 loading
   const scan = useCallback(async () => {
     if (inFlightRef.current) return // 防止重叠
     inFlightRef.current = true
-    setIsScanning(true)
     const t0 = performance.now()
     try {
       const result = await listListeningPorts()
@@ -55,7 +55,28 @@ export function usePortInspector() {
       console.error('[port-inspector] scan failed:', err)
     } finally {
       inFlightRef.current = false
-      setIsScanning(false)
+    }
+  }, [])
+
+  // 用户主动扫描（刷新 / 恢复），附带按钮 loading 反馈
+  const scanWithFeedback = useCallback(async () => {
+    if (inFlightRef.current) return
+    setIsUserScanning(true)
+    inFlightRef.current = true
+    const t0 = performance.now()
+    try {
+      const result = await listListeningPorts()
+      const duration = Math.round(performance.now() - t0)
+
+      const current = useServiceStore.getState().ports
+      if (!current || !hasPortsChanged(current, result)) return
+
+      useServiceStore.getState().replacePorts(result, duration)
+    } catch (err) {
+      console.error('[port-inspector] scan failed:', err)
+    } finally {
+      inFlightRef.current = false
+      setIsUserScanning(false)
     }
   }, [])
 
@@ -73,10 +94,10 @@ export function usePortInspector() {
   const prevPausedRef = useRef(isPaused)
   useEffect(() => {
     if (prevPausedRef.current && !isPaused) {
-      void scan()
+      void scanWithFeedback()
     }
     prevPausedRef.current = isPaused
-  }, [isPaused, scan])
+  }, [isPaused, scanWithFeedback])
 
   // mount 时立即扫一次（独立 effect，只跑一次，不随 isPaused 重 run）
   useEffect(() => {
@@ -99,8 +120,8 @@ export function usePortInspector() {
   }, [scan])
 
   const refreshNow = useCallback(async () => {
-    await scan()
-  }, [scan])
+    await scanWithFeedback()
+  }, [scanWithFeedback])
 
-  return { refreshNow, isScanning }
+  return { refreshNow, isScanning: isUserScanning }
 }
