@@ -37,9 +37,11 @@ export function usePortInspector() {
   const scanLockRef = useRef<boolean>(false)
   const [isRefreshLoading, setIsRefreshLoading] = useState(false)
   const [isResumeLoading, setIsResumeLoading] = useState(false)
+  const [isScanning, setIsScanning] = useState(false)
 
   // 纯扫描逻辑，不做重叠保护 & loading 管理
   const scan = useCallback(async () => {
+    setIsScanning(true)
     const t0 = performance.now()
     try {
       const result = await listListeningPorts()
@@ -52,6 +54,8 @@ export function usePortInspector() {
       useServiceStore.getState().replacePorts(result, duration)
     } catch (err) {
       console.error('[port-inspector] scan failed:', err)
+    } finally {
+      setIsScanning(false)
     }
   }, [])
 
@@ -112,5 +116,5 @@ export function usePortInspector() {
     }
   }, [scan])
 
-  return { refreshNow, isRefreshLoading, isResumeLoading }
+  return { refreshNow, isRefreshLoading, isResumeLoading, isScanning }
 }

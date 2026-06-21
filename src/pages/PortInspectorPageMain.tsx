@@ -73,7 +73,7 @@ export function PortInspectorPageMain() {
     }, { replace: true })
   }, [isPaused, setSearchParams])
 
-  const { refreshNow, isRefreshLoading, isResumeLoading } = usePortInspector()
+  const { refreshNow, isRefreshLoading, isResumeLoading, isScanning } = usePortInspector()
   const { scheduleClearDiffs } = usePortDiff(clearDiffs)
 
   // 当 ports 中出现 diff 标记时，5 秒后清空
@@ -101,7 +101,7 @@ export function PortInspectorPageMain() {
           services={services}
           onKill={() => void refreshNow()}
         />
-        <PortInspectorStatusBar />
+        <PortInspectorStatusBar isScanning={isScanning} />
       </Card>
     </div>
   )
