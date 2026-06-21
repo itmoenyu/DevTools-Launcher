@@ -1,5 +1,5 @@
 import { Card } from 'antd'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { useServiceStore } from '@/store/service-store'
@@ -42,19 +42,35 @@ export function PortInspectorPageMain() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const [keyword, setKeyword] = useState('')
+  // 搜索：回车触发，不实时过滤
+  const [searchKeyword, setSearchKeyword] = useState('')
+  const [isSearchLoading, setIsSearchLoading] = useState(false)
+
   const filteredPorts = usePortFilter(ports, filter, services)
   const searchedPorts = useMemo(
-    () => keyword
+    () => searchKeyword
       ? filteredPorts.filter((p) =>
-          String(p.port).includes(keyword)
-          || p.pid?.toString().includes(keyword)
-          || p.processName?.toLowerCase().includes(keyword.toLowerCase())
-          || p.localAddress?.includes(keyword),
+          String(p.port).includes(searchKeyword)
+          || p.pid?.toString().includes(searchKeyword)
+          || p.processName?.toLowerCase().includes(searchKeyword.toLowerCase())
+          || p.localAddress?.includes(searchKeyword),
         )
       : filteredPorts,
-    [filteredPorts, keyword],
+    [filteredPorts, searchKeyword],
   )
+
+  const { refreshNow, scanSilent, isRefreshLoading, isResumeLoading, isScanning } = usePortInspector()
+  const { scheduleClearDiffs } = usePortDiff(clearDiffs)
+
+  // 搜索触发：设置关键词 → 静默扫描 → 完成后 loading 结束
+  const handleSearch = useCallback(async (keyword: string) => {
+    setSearchKeyword(keyword)
+    if (!keyword) return
+    setIsSearchLoading(true)
+    await scanSilent()
+    setIsSearchLoading(false)
+  }, [scanSilent])
+
   // 过滤模式变化 → 同步到 URL
   useEffect(() => {
     setSearchParams((prev) => {
@@ -73,9 +89,6 @@ export function PortInspectorPageMain() {
     }, { replace: true })
   }, [isPaused, setSearchParams])
 
-  const { refreshNow, isRefreshLoading, isResumeLoading, isScanning } = usePortInspector()
-  const { scheduleClearDiffs } = usePortDiff(clearDiffs)
-
   // 当 ports 中出现 diff 标记时，5 秒后清空
   useEffect(() => {
     if (ports.some((p) => p.diff)) {
@@ -90,16 +103,21 @@ export function PortInspectorPageMain() {
     return () => window.removeEventListener('port-inspector:refresh-now', onRefresh)
   }, [refreshNow])
 
+  // 搜索加载时清空 dataSource，避免旧数据 + Spin 同时出现
+  const tableLoading = isSearchLoading && !!searchKeyword
+  const displayPorts = tableLoading ? [] : searchedPorts
+
   return (
     <div className="page-container">
       <PortRowStyles />
       <Card className="glass-card" bordered={false} styles={{ body: { padding: 0 } }}>
         <PortInspectorToolbar isRefreshLoading={isRefreshLoading} isResumeLoading={isResumeLoading} />
-        <PortInspectorQuickFilters mode={filter} keyword={keyword} onChange={setFilter} onKeywordChange={setKeyword} />
+        <PortInspectorQuickFilters mode={filter} onChange={setFilter} onSearch={handleSearch} />
         <PortInspectorTable
-          ports={searchedPorts}
+          ports={displayPorts}
           services={services}
           onKill={() => void refreshNow()}
+          loading={tableLoading}
         />
         <PortInspectorStatusBar isScanning={isScanning} />
       </Card>

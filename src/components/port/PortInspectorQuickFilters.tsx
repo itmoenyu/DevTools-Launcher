@@ -1,5 +1,6 @@
 import { Button, Input } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
+import { useState } from 'react'
 
 import { useServiceStore } from '@/store/service-store'
 import { PORT_FILTER_LABELS, type PortFilterMode } from '@/modules/port-manager/constants'
@@ -8,16 +9,21 @@ const FILTERS: PortFilterMode[] = ['all', 'mine', 'listening', 'conflict']
 
 interface Props {
   mode: PortFilterMode
-  keyword: string
   onChange: (mode: PortFilterMode) => void
-  onKeywordChange: (keyword: string) => void
+  onSearch: (keyword: string) => void
 }
 
 /**
  * 快捷过滤标签 + 搜索框。
- * 受控组件：mode/onChange / keyword/onKeywordChange 由父级传入。
+ * 回车触发搜索，输入仅维护本地 value，不实时过滤。
  */
-export function PortInspectorQuickFilters({ mode, keyword, onChange, onKeywordChange }: Props) {
+export function PortInspectorQuickFilters({ mode, onChange, onSearch }: Props) {
+  const [inputValue, setInputValue] = useState('')
+
+  function handleSearch() {
+    onSearch(inputValue.trim())
+  }
+
   return (
     <div
       style={{
@@ -37,8 +43,15 @@ export function PortInspectorQuickFilters({ mode, keyword, onChange, onKeywordCh
         prefix={<SearchOutlined />}
         style={{ width: 240 }}
         allowClear
-        value={keyword}
-        onChange={(e) => onKeywordChange(e.target.value)}
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onPressEnter={handleSearch}
+        suffix={
+          <SearchOutlined
+            style={{ cursor: 'pointer', color: '#1677ff' }}
+            onClick={handleSearch}
+          />
+        }
       />
     </div>
   )

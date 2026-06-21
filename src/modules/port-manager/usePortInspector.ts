@@ -39,9 +39,8 @@ export function usePortInspector() {
   const [isResumeLoading, setIsResumeLoading] = useState(false)
   const [isScanning, setIsScanning] = useState(false)
 
-  // 纯扫描逻辑，不做重叠保护 & loading 管理
-  const scan = useCallback(async () => {
-    setIsScanning(true)
+  // 纯扫描逻辑，不含任何状态管理
+  const scanCore = useCallback(async () => {
     const t0 = performance.now()
     try {
       const result = await listListeningPorts()
@@ -54,10 +53,15 @@ export function usePortInspector() {
       useServiceStore.getState().replacePorts(result, duration)
     } catch (err) {
       console.error('[port-inspector] scan failed:', err)
-    } finally {
-      setIsScanning(false)
     }
   }, [])
+
+  // 带 isScanning 的扫描（自动轮询 / mount / 恢复 / 可见性）
+  const scan = useCallback(async () => {
+    setIsScanning(true)
+    await scanCore()
+    setIsScanning(false)
+  }, [scanCore])
 
   // 主轮询 - 内部做重叠保护
   useEffect(() => {
@@ -103,18 +107,29 @@ export function usePortInspector() {
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [scan])
 
-  // 刷新按钮 - 独立 loading
+  // 刷新按钮 - 独立 loading（仅影响刷新按钮，不影响状态条）
   const refreshNow = useCallback(async () => {
     if (scanLockRef.current) return
     setIsRefreshLoading(true)
     scanLockRef.current = true
     try {
-      await scan()
+      await scanCore()
     } finally {
       scanLockRef.current = false
       setIsRefreshLoading(false)
     }
-  }, [scan])
+  }, [scanCore])
 
-  return { refreshNow, isRefreshLoading, isResumeLoading, isScanning }
+  // 静默扫描 - 无任何 loading 反馈（供搜索用）
+  const scanSilent = useCallback(async () => {
+    if (scanLockRef.current) return
+    scanLockRef.current = true
+    try {
+      await scanCore()
+    } finally {
+      scanLockRef.current = false
+    }
+  }, [scanCore])
+
+  return { refreshNow, scanSilent, isRefreshLoading, isResumeLoading, isScanning }
 }

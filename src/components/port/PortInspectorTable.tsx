@@ -1,4 +1,4 @@
-import { Button, Table, Tag, Tooltip, message } from 'antd'
+import { Button, Spin, Table, Tag, Tooltip, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { memo, useMemo, useState } from 'react'
 
@@ -13,6 +13,7 @@ interface Props {
   ports: PortInspectionItem[]
   services: ServiceWithRuntime[]
   onKill: () => void
+  loading?: boolean
 }
 
 const STATE_TAG_COLORS: Record<TcpState, string> = {
@@ -30,7 +31,7 @@ const STATE_TAG_COLORS: Record<TcpState, string> = {
   UNKNOWN: 'default',
 }
 
-export const PortInspectorTable = memo(function PortInspectorTable({ ports, services, onKill }: Props) {
+export const PortInspectorTable = memo(function PortInspectorTable({ ports, services, onKill, loading }: Props) {
   const myPorts = useMemo(
     () => new Set(
       services
@@ -149,24 +150,46 @@ export const PortInspectorTable = memo(function PortInspectorTable({ ports, serv
   ], [myPorts, serviceNameByPort, onKill, loadingPids])
 
   return (
-    <Table<PortInspectionItem>
-      rowKey="port"
-      dataSource={ports}
-      columns={columns}
-      size="small"
-      pagination={false}
-      virtual
-      rowClassName={(record) => {
-        const classes: string[] = []
-        if (record.diff === 'new') classes.push('port-row-new')
-        else if (record.diff === 'changed') classes.push('port-row-changed')
-        else if (record.diff === 'gone') classes.push('port-row-gone')
-        if (myPorts.has(record.port) && record.pid !== null) {
-          classes.push('port-row-conflict')
-        }
-        return classes.join(' ')
-      }}
-      scroll={{ y: 620, x: 'max-content' }}
-    />
+    <div style={{ position: 'relative' }}>
+      <Table<PortInspectionItem>
+        rowKey="port"
+        dataSource={ports}
+        columns={columns}
+        size="small"
+        pagination={false}
+        virtual
+        rowClassName={(record) => {
+          const classes: string[] = []
+          if (record.diff === 'new') classes.push('port-row-new')
+          else if (record.diff === 'changed') classes.push('port-row-changed')
+          else if (record.diff === 'gone') classes.push('port-row-gone')
+          if (myPorts.has(record.port) && record.pid !== null) {
+            classes.push('port-row-conflict')
+          }
+          return classes.join(' ')
+        }}
+        scroll={{ y: 620, x: 'max-content' }}
+      />
+      {loading && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 40,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(255,255,255,0.5)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 10,
+            borderRadius: '0 0 12px 12px',
+          }}
+        >
+          <Spin size="large" />
+        </div>
+      )}
+    </div>
   )
 })

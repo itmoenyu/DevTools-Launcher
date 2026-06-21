@@ -49,15 +49,32 @@ export const PortInspectorStatusBar = memo(function PortInspectorStatusBar({ isS
         <span>
           <span
             style={{
-              display: 'inline-block',
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: summary.isPaused ? '#bfbfbf' : '#52c41a',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 16,
+              height: 16,
               marginRight: 4,
+              verticalAlign: 'middle',
             }}
-          />
-          {summary.isPaused ? '已暂停' : isScanning ? <><LoadingOutlined style={{ marginRight: 4 }} />实时</> : '实时'}
+          >
+            {isScanning ? (
+              <LoadingOutlined style={{ fontSize: 12 }} />
+            ) : (
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: summary.isPaused ? '#bfbfbf' : '#52c41a',
+                }}
+              />
+            )}
+          </span>
+          <span style={{ display: 'inline-block', minWidth: 40, textAlign: 'center' }}>
+            {summary.isPaused ? '已暂停' : isScanning ? '更新中' : '实时'}
+          </span>
         </span>
       </div>
     </div>
