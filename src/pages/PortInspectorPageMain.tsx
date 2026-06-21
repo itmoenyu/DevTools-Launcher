@@ -1,5 +1,5 @@
 import { Card } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useServiceStore } from '@/store/service-store'
 import { usePortFilter } from '@/modules/port-manager/usePortFilter'
@@ -23,7 +23,18 @@ export function PortInspectorPageMain() {
   const clearDiffs = useServiceStore((s) => s.clearDiffs)
 
   const [filter, setFilter] = useState<PortFilterMode>('all')
+  const [keyword, setKeyword] = useState('')
   const filteredPorts = usePortFilter(ports, filter, services)
+  const searchedPorts = useMemo(
+    () => keyword
+      ? filteredPorts.filter((p) =>
+          String(p.port).includes(keyword)
+          || p.processName?.toLowerCase().includes(keyword.toLowerCase())
+          || p.localAddress?.includes(keyword),
+        )
+      : filteredPorts,
+    [filteredPorts, keyword],
+  )
   const { refreshNow } = usePortInspector()
   const { scheduleClearDiffs } = usePortDiff(clearDiffs)
 
@@ -46,9 +57,9 @@ export function PortInspectorPageMain() {
       <PortRowStyles />
       <Card className="glass-card" bordered={false} styles={{ body: { padding: 0 } }}>
         <PortInspectorToolbar />
-        <PortInspectorQuickFilters mode={filter} onChange={setFilter} />
+        <PortInspectorQuickFilters mode={filter} keyword={keyword} onChange={setFilter} onKeywordChange={setKeyword} />
         <PortInspectorTable
-          ports={filteredPorts}
+          ports={searchedPorts}
           services={services}
           onKill={() => void refreshNow()}
         />

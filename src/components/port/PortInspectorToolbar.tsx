@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { Button, Tooltip } from 'antd'
-import { PauseOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons'
+import { PauseOutlined, ReloadOutlined } from '@ant-design/icons'
 
 import { useServiceStore } from '@/store/service-store'
 
@@ -8,7 +8,7 @@ import { PortInspectorSummary } from './PortInspectorSummary'
 
 /**
  * 顶部工具栏（两行分层布局）：
- *  - 第一行：标题 + 状态摘要 + 暂停/刷新/设置
+ *  - 第一行：标题 + 状态摘要 + 暂停/刷新
  *  - 第二行在 PortInspectorQuickFilters 中
  */
 export const PortInspectorToolbar = memo(function PortInspectorToolbar() {
@@ -50,7 +50,6 @@ export const PortInspectorToolbar = memo(function PortInspectorToolbar() {
         >
           刷新
         </Button>
-        <Button icon={<SettingOutlined />} />
       </div>
     </div>
   )
