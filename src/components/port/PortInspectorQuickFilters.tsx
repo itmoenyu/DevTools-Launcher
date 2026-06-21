@@ -1,4 +1,5 @@
 import { Button, Input } from 'antd'
+import { SearchOutlined } from '@ant-design/icons'
 
 import { useServiceStore } from '@/store/service-store'
 import { PORT_FILTER_LABELS, type PortFilterMode } from '@/modules/port-manager/constants'
@@ -32,7 +33,8 @@ export function PortInspectorQuickFilters({ mode, keyword, onChange, onKeywordCh
       ))}
       <div style={{ flex: 1 }} />
       <Input
-        placeholder="🔍 搜索端口/进程"
+        placeholder="搜索端口/进程"
+        prefix={<SearchOutlined />}
         style={{ width: 240 }}
         allowClear
         value={keyword}

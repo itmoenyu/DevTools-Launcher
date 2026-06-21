@@ -1,10 +1,28 @@
 import { memo } from 'react'
 import { Button, Tooltip } from 'antd'
-import { PauseOutlined, ReloadOutlined } from '@ant-design/icons'
+import { ReloadOutlined } from '@ant-design/icons'
 
 import { useServiceStore } from '@/store/service-store'
 
 import { PortInspectorSummary } from './PortInspectorSummary'
+
+/** 自定义实心方形暂停图标 */
+function StopSquareIcon() {
+  return (
+    <svg viewBox="0 0 1024 1024" width="1em" height="1em" fill="#d81e06">
+      <path d="M128 128h768v768H128z" />
+    </svg>
+  )
+}
+
+/** 自定义绿色播放三角图标 */
+function PlayTriangleIcon() {
+  return (
+    <svg viewBox="-100 -50 1024 1024" width="1em" height="1em" fill="#1afa29">
+      <path d="M170.666667 128l2.133333 768c0 34.133333 36.266667 53.333333 64 34.133333l597.333333-384c25.6-17.066667 25.6-53.333333 0-70.4L234.666667 91.733333C206.933333 74.666667 170.666667 93.866667 170.666667 128z" />
+    </svg>
+  )
+}
 
 /**
  * 顶部工具栏（两行分层布局）：
@@ -13,7 +31,6 @@ import { PortInspectorSummary } from './PortInspectorSummary'
  */
 export const PortInspectorToolbar = memo(function PortInspectorToolbar() {
   const isPaused = useServiceStore((s) => s.isPaused)
-  const pauseReason = useServiceStore((s) => s.pauseReason)
   const setPaused = useServiceStore((s) => s.setPaused)
 
   return (
@@ -35,12 +52,12 @@ export const PortInspectorToolbar = memo(function PortInspectorToolbar() {
         <Tooltip
           title={
             isPaused
-              ? `已暂停（${pauseReason === 'tab-hidden' ? '标签页隐藏' : '手动'}）`
+              ? '恢复自动刷新'
               : '暂停自动刷新'
           }
         >
           <Button
-            icon={<PauseOutlined />}
+            icon={isPaused ? <PlayTriangleIcon /> : <StopSquareIcon />}
             onClick={() => setPaused(!isPaused, isPaused ? null : 'manual')}
           />
         </Tooltip>

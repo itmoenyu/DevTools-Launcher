@@ -9,13 +9,15 @@ import { PORT_REFRESH_INTERVAL_MS } from '@/modules/port-manager/constants'
  */
 export function PortInspectorSummary() {
   const summary = useServiceStore((s) => s.summary)
+  const isPaused = useServiceStore((s) => s.isPaused)
   const [now, setNow] = useState(Date.now())
 
-  // 轮询周期与端口刷新同步，避免 1 秒一次的不必要渲染
+  // 只在非暂停时更新计时，暂停时冻结"X秒前更新"不再递增
   useEffect(() => {
+    if (isPaused) return
     const id = setInterval(() => setNow(Date.now()), PORT_REFRESH_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [])
+  }, [isPaused])
 
   const ageMs = summary.lastRefreshedAt ? now - summary.lastRefreshedAt : null
   const ageText =
