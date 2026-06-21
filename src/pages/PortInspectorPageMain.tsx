@@ -71,6 +71,15 @@ export function PortInspectorPageMain() {
     setIsSearchLoading(false)
   }, [scanSilent])
 
+  // 过滤切换：触发静默扫描以获取最新数据
+  const [isFilterLoading, setIsFilterLoading] = useState(false)
+  const handleFilterChange = useCallback(async (mode: PortFilterMode) => {
+    setFilter(mode)
+    setIsFilterLoading(true)
+    await scanSilent()
+    setIsFilterLoading(false)
+  }, [scanSilent])
+
   // 过滤模式变化 → 同步到 URL
   useEffect(() => {
     setSearchParams((prev) => {
@@ -103,8 +112,8 @@ export function PortInspectorPageMain() {
     return () => window.removeEventListener('port-inspector:refresh-now', onRefresh)
   }, [refreshNow])
 
-  // 搜索加载时清空 dataSource，避免旧数据 + Spin 同时出现
-  const tableLoading = isSearchLoading && !!searchKeyword
+  // 搜索/过滤加载时清空 dataSource，避免旧数据 + Spin 同时出现
+  const tableLoading = (isSearchLoading && !!searchKeyword) || isFilterLoading
   const displayPorts = tableLoading ? [] : searchedPorts
 
   return (
@@ -112,7 +121,7 @@ export function PortInspectorPageMain() {
       <PortRowStyles />
       <Card className="glass-card" bordered={false} styles={{ body: { padding: 0 } }}>
         <PortInspectorToolbar isRefreshLoading={isRefreshLoading} isResumeLoading={isResumeLoading} />
-        <PortInspectorQuickFilters mode={filter} onChange={setFilter} onSearch={handleSearch} />
+        <PortInspectorQuickFilters mode={filter} onChange={handleFilterChange} onSearch={handleSearch} />
         <PortInspectorTable
           ports={displayPorts}
           services={services}

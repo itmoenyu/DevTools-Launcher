@@ -58,8 +58,8 @@ export const PortInspectorToolbar = memo(function PortInspectorToolbar({
         <Tooltip
           title={
             isPaused
-              ? '恢复自动刷新'
-              : '暂停自动刷新'
+              ? '启动自动刷新'
+              : '关闭自动刷新'
           }
         >
           <Button
