@@ -73,7 +73,7 @@ export function PortInspectorPageMain() {
     }, { replace: true })
   }, [isPaused, setSearchParams])
 
-  const { refreshNow, isScanning } = usePortInspector()
+  const { refreshNow, isRefreshLoading, isResumeLoading } = usePortInspector()
   const { scheduleClearDiffs } = usePortDiff(clearDiffs)
 
   // 当 ports 中出现 diff 标记时，5 秒后清空
@@ -94,7 +94,7 @@ export function PortInspectorPageMain() {
     <div className="page-container">
       <PortRowStyles />
       <Card className="glass-card" bordered={false} styles={{ body: { padding: 0 } }}>
-        <PortInspectorToolbar isScanning={isScanning} />
+        <PortInspectorToolbar isRefreshLoading={isRefreshLoading} isResumeLoading={isResumeLoading} />
         <PortInspectorQuickFilters mode={filter} keyword={keyword} onChange={setFilter} onKeywordChange={setKeyword} />
         <PortInspectorTable
           ports={searchedPorts}

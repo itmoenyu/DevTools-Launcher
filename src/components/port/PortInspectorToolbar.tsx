@@ -29,7 +29,13 @@ function PlayTriangleIcon() {
  *  - 第一行：标题 + 状态摘要 + 暂停/刷新
  *  - 第二行在 PortInspectorQuickFilters 中
  */
-export const PortInspectorToolbar = memo(function PortInspectorToolbar({ isScanning }: { isScanning: boolean }) {
+export const PortInspectorToolbar = memo(function PortInspectorToolbar({
+  isRefreshLoading,
+  isResumeLoading,
+}: {
+  isRefreshLoading: boolean
+  isResumeLoading: boolean
+}) {
   const isPaused = useServiceStore((s) => s.isPaused)
   const setPaused = useServiceStore((s) => s.setPaused)
 
@@ -57,13 +63,13 @@ export const PortInspectorToolbar = memo(function PortInspectorToolbar({ isScann
           }
         >
           <Button
-            loading={isScanning}
+            loading={isResumeLoading}
             icon={isPaused ? <PlayTriangleIcon /> : <StopSquareIcon />}
             onClick={() => setPaused(!isPaused, isPaused ? null : 'manual')}
           />
         </Tooltip>
         <Button
-          loading={isScanning}
+          loading={isRefreshLoading}
           icon={<ReloadOutlined />}
           onClick={() => window.dispatchEvent(new CustomEvent('port-inspector:refresh-now'))}
         >

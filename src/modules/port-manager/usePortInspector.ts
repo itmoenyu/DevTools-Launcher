@@ -34,13 +34,12 @@ function hasPortsChanged(a: PortInspectionItem[], b: PortInspectionItem[]): bool
 export function usePortInspector() {
   const isPaused = useServiceStore((s) => s.isPaused)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const inFlightRef = useRef<boolean>(false)
-  const [isUserScanning, setIsUserScanning] = useState(false)
+  const scanLockRef = useRef<boolean>(false)
+  const [isRefreshLoading, setIsRefreshLoading] = useState(false)
+  const [isResumeLoading, setIsResumeLoading] = useState(false)
 
-  // 后台扫描（自动轮询 / mount / 标签页切回），不触发按钮 loading
+  // 纯扫描逻辑，不做重叠保护 & loading 管理
   const scan = useCallback(async () => {
-    if (inFlightRef.current) return // 防止重叠
-    inFlightRef.current = true
     const t0 = performance.now()
     try {
       const result = await listListeningPorts()
@@ -53,53 +52,34 @@ export function usePortInspector() {
       useServiceStore.getState().replacePorts(result, duration)
     } catch (err) {
       console.error('[port-inspector] scan failed:', err)
-    } finally {
-      inFlightRef.current = false
     }
   }, [])
 
-  // 用户主动扫描（刷新 / 恢复），附带按钮 loading 反馈
-  const scanWithFeedback = useCallback(async () => {
-    if (inFlightRef.current) return
-    setIsUserScanning(true)
-    inFlightRef.current = true
-    const t0 = performance.now()
-    try {
-      const result = await listListeningPorts()
-      const duration = Math.round(performance.now() - t0)
-
-      const current = useServiceStore.getState().ports
-      if (!current || !hasPortsChanged(current, result)) return
-
-      useServiceStore.getState().replacePorts(result, duration)
-    } catch (err) {
-      console.error('[port-inspector] scan failed:', err)
-    } finally {
-      inFlightRef.current = false
-      setIsUserScanning(false)
-    }
-  }, [])
-
-  // 主轮询生命周期 - 只在 isPaused 切换时增删 interval
+  // 主轮询 - 内部做重叠保护
   useEffect(() => {
-    if (!isPaused) {
-      intervalRef.current = setInterval(scan, PORT_REFRESH_INTERVAL_MS)
-    }
+    if (isPaused) return
+    intervalRef.current = setInterval(async () => {
+      if (scanLockRef.current) return
+      scanLockRef.current = true
+      await scan()
+      scanLockRef.current = false
+    }, PORT_REFRESH_INTERVAL_MS)
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
   }, [isPaused, scan])
 
-  // 从暂停恢复时立即扫一次，不用等 interval 周期
+  // 从暂停恢复时立即扫一次
   const prevPausedRef = useRef(isPaused)
   useEffect(() => {
     if (prevPausedRef.current && !isPaused) {
-      void scanWithFeedback()
+      setIsResumeLoading(true)
+      scan().finally(() => setIsResumeLoading(false))
     }
     prevPausedRef.current = isPaused
-  }, [isPaused, scanWithFeedback])
+  }, [isPaused, scan])
 
-  // mount 时立即扫一次（独立 effect，只跑一次，不随 isPaused 重 run）
+  // mount 时立即扫一次
   useEffect(() => {
     void scan()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -112,16 +92,25 @@ export function usePortInspector() {
         useServiceStore.getState().setPaused(true, 'tab-hidden')
       } else {
         useServiceStore.getState().setPaused(false, null)
-        void scan() // 切回立即补一次
+        void scan()
       }
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [scan])
 
+  // 刷新按钮 - 独立 loading
   const refreshNow = useCallback(async () => {
-    await scanWithFeedback()
-  }, [scanWithFeedback])
+    if (scanLockRef.current) return
+    setIsRefreshLoading(true)
+    scanLockRef.current = true
+    try {
+      await scan()
+    } finally {
+      scanLockRef.current = false
+      setIsRefreshLoading(false)
+    }
+  }, [scan])
 
-  return { refreshNow, isScanning: isUserScanning }
+  return { refreshNow, isRefreshLoading, isResumeLoading }
 }
