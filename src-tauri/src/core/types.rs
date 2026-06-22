@@ -66,10 +66,37 @@ pub struct LogEntry {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TcpState {
+    Listening,
+    Established,
+    TimeWait,
+    CloseWait,
+    FinWait1,
+    FinWait2,
+    SynSent,
+    SynReceived,
+    Closing,
+    LastAck,
+    DeleteTcb,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PortProtocol {
+    Tcp,
+    Udp,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PortInspectionItem {
     pub port: u16,
+    pub state: TcpState,
+    pub protocol: PortProtocol,
+    pub local_address: String,
     pub occupied: bool,
     pub pid: Option<u32>,
     pub process_name: Option<String>,

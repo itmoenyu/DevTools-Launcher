@@ -2,7 +2,7 @@ import { Alert, Button, Card, Col, Row, Space, Statistic, Table, Tooltip, Typogr
 import { useMemo, useState } from 'react'
 
 import ServiceRuntimeStatusIndicator from '@/components/common/ServiceRuntimeStatusIndicator'
-import { inspectPorts, startService, stopService } from '@/services/tauri-api/client'
+import { listListeningPorts, startService, stopService } from '@/services/tauri-api/client'
 import { useServiceStore } from '@/store/service-store'
 import { formatDateTime } from '@/utils/formatters'
 import {
@@ -12,13 +12,11 @@ import {
   getServiceStatusPresentation,
 } from '@/utils/serviceStatusPresentation'
 
-const commonPorts = [3306, 6379, 8080, 9000]
-
 export function DashboardPageMain() {
   const services = useServiceStore((state) => state.services)
   const history = useServiceStore((state) => state.history)
   const ports = useServiceStore((state) => state.ports)
-  const setPorts = useServiceStore((state) => state.setPorts)
+  const replacePorts = useServiceStore((state) => state.replacePorts)
   const [messageApi, contextHolder] = message.useMessage()
   const [refreshingPorts, setRefreshingPorts] = useState(false)
   const [batchAction, setBatchAction] = useState<'start' | 'stop' | null>(null)
@@ -43,11 +41,13 @@ export function DashboardPageMain() {
     setPageError(null)
 
     try {
-      const result = await inspectPorts(commonPorts)
-      setPorts(result)
-      messageApi.success(`常用端口扫描完成，共检查 ${result.length} 个端口`)
+      const t0 = performance.now()
+      const result = await listListeningPorts()
+      const duration = Math.round(performance.now() - t0)
+      replacePorts(result, duration)
+      messageApi.success(`全量端口扫描完成，共 ${result.length} 个端口`)
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '常用端口扫描失败'
+      const errorMessage = error instanceof Error ? error.message : '端口扫描失败'
       setPageError(errorMessage)
       messageApi.error(errorMessage)
     } finally {

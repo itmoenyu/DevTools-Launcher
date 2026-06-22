@@ -66,6 +66,14 @@ export async function killProcessByPid(pid: number) {
   return invoke<boolean>('kill_process_by_pid', { pid })
 }
 
+export async function listListeningPorts() {
+  return invoke<PortInspectionItem[]>('list_listening_ports_cmd')
+}
+
+export async function openInBrowser(port: number, address: string) {
+  return invoke<void>('open_in_browser_cmd', { port, address })
+}
+
 export async function queryLogs(serviceId?: string, keyword?: string) {
   return invoke<LogEntry[]>('query_logs', { serviceId, keyword })
 }

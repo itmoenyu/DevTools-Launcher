@@ -22,6 +22,8 @@ export function OperationHistoryPageMain() {
         <Table
           rowKey="id"
           dataSource={history}
+          virtual
+          scroll={{ y: 680, x: 'max-content' }}
           columns={[
             { title: '服务名称', dataIndex: 'serviceName' },
             { title: '操作类型', dataIndex: 'operationType' },
