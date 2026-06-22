@@ -56,11 +56,16 @@ function normalizeReleaseVersion(tagName?: string) {
 function resolveReleaseNotes(update: Update, release?: GithubLatestReleasePayload | null) {
   const rawNotes = update.rawJson?.notes
   const rawBody = update.rawJson?.body
+  // 优先使用 GitHub Releases API 的 release.body：workflow 每次成功执行都会
+  // 覆盖 GitHub Release 上的 body，是真正的最新值。
+  // update.body / rawJson.notes / rawJson.body 都来自 latest.json，
+  // tauri-action 只在发布那一刻写入一次，且容易被 CDN 缓存，
+  // 当同一个 tag 连续触发多次 workflow 时会拿到陈旧的 commit list。
   const normalized =
-    update.body
+    release?.body
+    || update.body
     || (typeof rawNotes === 'string' ? rawNotes : undefined)
     || (typeof rawBody === 'string' ? rawBody : undefined)
-    || release?.body
 
   return normalizeReleaseNotes(normalized)
 }
