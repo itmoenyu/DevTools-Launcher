@@ -12,6 +12,7 @@ import {
 } from 'antd'
 
 import { useUpdater } from '@/app/useUpdater'
+import { ReleaseNotes } from '@/components/update/ReleaseNotes'
 import { updateAppSettings } from '@/services/tauri-api/client'
 import { useServiceStore } from '@/store/service-store'
 import { formatDateTime } from '@/utils/formatters'
@@ -151,9 +152,10 @@ export function GeneralSettingsPageMain() {
 
           <div className="update-release-notes-block">
             <Typography.Text strong>更新说明</Typography.Text>
-            <Typography.Paragraph className="update-release-notes">
-              {releaseNotes || settings?.latestReleaseNotes || '暂无更新'}
-            </Typography.Paragraph>
+            <ReleaseNotes
+              content={releaseNotes || settings?.latestReleaseNotes || '暂无更新'}
+              className="update-release-notes"
+            />
           </div>
         </Space>
       </Card>

@@ -138,6 +138,178 @@ body {
   white-space: pre-wrap;
 }
 
+/* release notes markdown 通用样式：覆盖弹窗（深色玻璃）和设置页（浅色卡片）两个场景 */
+.release-notes {
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.release-notes h1,
+.release-notes h2,
+.release-notes h3,
+.release-notes h4,
+.release-notes h5,
+.release-notes h6 {
+  margin: 16px 0 8px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1.4;
+}
+
+.release-notes h1 { font-size: 18px; }
+.release-notes h2 { font-size: 16px; }
+.release-notes h3 { font-size: 14px; }
+.release-notes h4,
+.release-notes h5,
+.release-notes h6 { font-size: 13px; }
+
+.release-notes > :first-child {
+  margin-top: 0 !important;
+}
+
+.release-notes > :last-child {
+  margin-bottom: 0 !important;
+}
+
+.release-notes p {
+  margin: 6px 0;
+}
+
+.release-notes ul,
+.release-notes ol {
+  margin: 6px 0;
+  padding-left: 22px;
+}
+
+.release-notes li {
+  margin: 2px 0;
+}
+
+.release-notes li > p {
+  margin: 2px 0;
+}
+
+.release-notes code {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.release-notes pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow-x: auto;
+}
+
+.release-notes pre code {
+  padding: 0;
+  background: transparent;
+  font-size: 12px;
+}
+
+.release-notes a {
+  color: #1677ff;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.release-notes a:hover {
+  text-decoration: underline;
+}
+
+.release-notes blockquote {
+  margin: 8px 0;
+  padding: 4px 12px;
+  border-left: 3px solid rgba(22, 119, 255, 0.6);
+  background: rgba(22, 119, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.release-notes blockquote > :first-child {
+  margin-top: 0;
+}
+
+.release-notes blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.release-notes hr {
+  margin: 12px 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.release-notes table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+  font-size: 12px;
+}
+
+.release-notes th,
+.release-notes td {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  text-align: left;
+}
+
+.release-notes th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+}
+
+/* GFM 任务列表 */
+.release-notes input[type='checkbox'] {
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* 设置页场景：容器本身有浅色背景，覆盖默认的白色文字 */
+.update-release-notes.release-notes {
+  background: color-mix(in srgb, var(--ant-color-bg-container) 35%, transparent);
+  color: var(--ant-color-text);
+}
+
+.update-release-notes.release-notes h1,
+.update-release-notes.release-notes h2,
+.update-release-notes.release-notes h3,
+.update-release-notes.release-notes h4,
+.update-release-notes.release-notes h5,
+.update-release-notes.release-notes h6 {
+  color: var(--ant-color-text-heading);
+}
+
+.update-release-notes.release-notes code {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.update-release-notes.release-notes pre {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.update-release-notes.release-notes blockquote {
+  background: rgba(22, 119, 255, 0.08);
+  color: var(--ant-color-text-secondary);
+}
+
+.update-release-notes.release-notes th {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.update-release-notes.release-notes th,
+.update-release-notes.release-notes td {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+.update-release-notes.release-notes hr {
+  border-top-color: rgba(0, 0, 0, 0.1);
+}
+
 .status-chip {
   display: inline-flex;
   align-items: center;

@@ -9,6 +9,8 @@ import type { CSSProperties } from 'react'
 
 import type { DesktopUpdaterStage } from '@/hooks/useDesktopUpdaterController'
 
+import { ReleaseNotes } from './ReleaseNotes'
+
 const glassMask: CSSProperties = {
   backdropFilter: 'blur(12px)',
   background: 'rgba(0, 0, 0, 0.3)',
@@ -168,17 +170,9 @@ export function UpdateAvailableModal({
             <Typography.Text strong style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 1 }}>
               更新说明
             </Typography.Text>
-            <Typography.Paragraph
-              style={{
-                margin: '8px 0 0',
-                fontSize: 13,
-                lineHeight: 1.7,
-                whiteSpace: 'pre-wrap',
-                color: 'rgba(255,255,255,0.8)',
-              }}
-            >
-              {releaseNotes}
-            </Typography.Paragraph>
+            <div style={{ marginTop: 8 }}>
+              <ReleaseNotes content={releaseNotes} />
+            </div>
           </div>
         ) : null}
 
